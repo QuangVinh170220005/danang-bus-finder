@@ -1,0 +1,109 @@
+[
+  {
+    "id": "01",
+    "name": "Tuyến 01: Bến Xe Đà Nẵng - Hội An",
+    "operator": "DATRAMACO",
+    "from": "Bến Xe Đà Nẵng",
+    "to": "Bến Xe Hội An",
+    "stops": [
+      { "id": "01_01", "name": "Bến Xe Đà Nẵng", "lat": 16.0738, "lng": 108.2280 },
+      { "id": "01_02", "name": "Ngã Tư Đống Đa - Điện Biên Phủ", "lat": 16.0700, "lng": 108.2250 },
+      { "id": "01_03", "name": "Chùa Phổ Đà", "lat": 16.0680, "lng": 108.2220 },
+      { "id": "01_04", "name": "Bệnh Viện Đà Nẵng", "lat": 16.0660, "lng": 108.2200 },
+      { "id": "01_05", "name": "Chợ Hàn", "lat": 16.0650, "lng": 108.2190 },
+      { "id": "01_06", "name": "Cầu Rồng", "lat": 16.0610, "lng": 108.2270 },
+      { "id": "01_07", "name": "Bãi Tắm Phạm Văn Đồng", "lat": 16.0580, "lng": 108.2350 },
+      { "id": "01_08", "name": "Trường ĐH Duy Tân", "lat": 16.0520, "lng": 108.2420 },
+      { "id": "01_09", "name": "Cầu Thuận Phước", "lat": 16.0890, "lng": 108.2480 },
+      { "id": "01_10", "name": "Ngã Ba Nam Ô", "lat": 16.1150, "lng": 108.2100 },
+      { "id": "01_11", "name": "Hải Châu 2", "lat": 16.0640, "lng": 108.2100 },
+      { "id": "01_12", "name": "Bến Xe Hội An", "lat": 15.8858, "lng": 108.3340 }
+    ]
+  },
+  {
+    "id": "03",
+    "name": "Tuyến 03: Đại Học Đông Á - Ngũ Hành Sơn",
+    "operator": "DATRAMACO",
+    "from": "Đại Học Đông Á",
+    "to": "Ngũ Hành Sơn",
+    "stops": [
+      { "id": "03_01", "name": "Đại Học Đông Á", "lat": 16.0460, "lng": 108.2060 },
+      { "id": "03_02", "name": "Ngã Tư Lê Duẩn - Phan Tứ", "lat": 16.0500, "lng": 108.2100 },
+      { "id": "03_03", "name": "Vincom Đà Nẵng", "lat": 16.0558, "lng": 108.2199 },
+      { "id": "03_04", "name": "Công Viên 29/3", "lat": 16.0590, "lng": 108.2200 },
+      { "id": "03_05", "name": "Cầu Sông Hàn", "lat": 16.0620, "lng": 108.2250 },
+      { "id": "03_06", "name": "Bảo Tàng Chăm", "lat": 16.0620, "lng": 108.2280 },
+      { "id": "03_07", "name": "Khách Sạn Fivitel", "lat": 16.0590, "lng": 108.2320 },
+      { "id": "03_08", "name": "Mỹ Khê Beach", "lat": 16.0410, "lng": 108.2480 },
+      { "id": "03_09", "name": "Ngã Tư Võ Nguyên Giáp", "lat": 16.0270, "lng": 108.2520 },
+      { "id": "03_10", "name": "Ngũ Hành Sơn", "lat": 16.0090, "lng": 108.2620 }
+    ]
+  },
+  {
+    "id": "06",
+    "name": "Tuyến 06: Bến Xe Đà Nẵng - Hòa Phước",
+    "operator": "DATRAMACO",
+    "from": "Bến Xe Đà Nẵng",
+    "to": "Ngã Ba Phú Đa",
+    "stops": [
+      { "id": "06_01", "name": "Bến Xe Đà Nẵng", "lat": 16.0738, "lng": 108.2280 },
+      { "id": "06_02", "name": "Hùng Vương - Lê Duẩn", "lat": 16.0720, "lng": 108.2260 },
+      { "id": "06_03", "name": "Bệnh Viện C", "lat": 16.0710, "lng": 108.2240 },
+      { "id": "06_04", "name": "Chợ Cồn", "lat": 16.0695, "lng": 108.2210 },
+      { "id": "06_05", "name": "Trường ĐH Bách Khoa", "lat": 16.0743, "lng": 108.1520 },
+      { "id": "06_06", "name": "KCN Hòa Khánh", "lat": 16.0820, "lng": 108.1420 },
+      { "id": "06_07", "name": "Hòa Phước", "lat": 16.0200, "lng": 108.1100 },
+      { "id": "06_08", "name": "Ngã Ba Phú Đa", "lat": 16.0050, "lng": 108.0950 }
+    ]
+  },
+  {
+    "id": "07",
+    "name": "Tuyến 07: Bến Xe Đà Nẵng - Liên Chiểu",
+    "operator": "DATRAMACO",
+    "from": "Bến Xe Đà Nẵng",
+    "to": "KCN Liên Chiểu",
+    "stops": [
+      { "id": "07_01", "name": "Bến Xe Đà Nẵng", "lat": 16.0738, "lng": 108.2280 },
+      { "id": "07_02", "name": "Trung Tâm Hành Chính", "lat": 16.0580, "lng": 108.2120 },
+      { "id": "07_03", "name": "Công Viên Biển Đông", "lat": 16.0560, "lng": 108.2080 },
+      { "id": "07_04", "name": "Đại Học Kinh Tế", "lat": 16.0540, "lng": 108.2020 },
+      { "id": "07_05", "name": "Hòa Minh", "lat": 16.0440, "lng": 108.1820 },
+      { "id": "07_06", "name": "Liên Chiểu", "lat": 16.0620, "lng": 108.1520 },
+      { "id": "07_07", "name": "KCN Liên Chiểu", "lat": 16.0750, "lng": 108.1380 }
+    ]
+  },
+  {
+    "id": "08",
+    "name": "Tuyến 08: Bệnh Viện C - Bãi Tắm Non Nước",
+    "operator": "DATRAMACO",
+    "from": "Bệnh Viện C",
+    "to": "Bãi Tắm Non Nước",
+    "stops": [
+      { "id": "08_01", "name": "Bệnh Viện C", "lat": 16.0710, "lng": 108.2240 },
+      { "id": "08_02", "name": "Ngã Tư Ông Ích Khiêm", "lat": 16.0690, "lng": 108.2200 },
+      { "id": "08_03", "name": "Chợ Hàn", "lat": 16.0650, "lng": 108.2190 },
+      { "id": "08_04", "name": "Cầu Rồng", "lat": 16.0610, "lng": 108.2270 },
+      { "id": "08_05", "name": "Phạm Văn Đồng", "lat": 16.0550, "lng": 108.2400 },
+      { "id": "08_06", "name": "An Thượng", "lat": 16.0480, "lng": 108.2450 },
+      { "id": "08_07", "name": "Mỹ An", "lat": 16.0390, "lng": 108.2500 },
+      { "id": "08_08", "name": "Phú Mỹ An", "lat": 16.0280, "lng": 108.2540 },
+      { "id": "08_09", "name": "Non Nước", "lat": 16.0080, "lng": 108.2650 },
+      { "id": "08_10", "name": "Bãi Tắm Non Nước", "lat": 15.9980, "lng": 108.2680 }
+    ]
+  },
+  {
+    "id": "17",
+    "name": "Tuyến 17: Bến Xe Đà Nẵng - Hòa Khương",
+    "operator": "DATRAMACO",
+    "from": "Bến Xe Đà Nẵng",
+    "to": "Hòa Khương",
+    "stops": [
+      { "id": "17_01", "name": "Bến Xe Đà Nẵng", "lat": 16.0738, "lng": 108.2280 },
+      { "id": "17_02", "name": "Ngã Ba Huế", "lat": 16.0760, "lng": 108.2260 },
+      { "id": "17_03", "name": "Trường THPT Phan Châu Trinh", "lat": 16.0780, "lng": 108.2100 },
+      { "id": "17_04", "name": "Hòa Xuân", "lat": 16.0820, "lng": 108.1780 },
+      { "id": "17_05", "name": "Hòa Phát", "lat": 16.0510, "lng": 108.1300 },
+      { "id": "17_06", "name": "Hòa Khương", "lat": 16.0240, "lng": 108.0860 }
+    ]
+  }
+]
