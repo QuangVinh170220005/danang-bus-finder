@@ -1,123 +1,130 @@
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useBusStore } from '../../store/busStore';
-import { generateWalkingDirections, formatTime } from '../../utils/walkingDirections';
 import { formatDistance } from '../../algorithms/haversine';
+import { tenChieu } from '../../algorithms/graph';
+import { duongPhoHopLy, layDuongPho } from '../../services/vietmap';
 
-export default function WalkingDirections() {
-  const { from, to, idsResult } = useBusStore();
+function useMetTheoPho(cacDiem) {
+  const [met, setMet] = useState(null);
+  const khoa = cacDiem
+    ? cacDiem.map((diem) => `${diem.lat.toFixed(5)},${diem.lng.toFixed(5)}`).join('|')
+    : '';
 
-  const walkingInfo = useMemo(() => {
-    if (!from || !idsResult?.found || !idsResult.startStop) {
-      return null;
+  useEffect(() => {
+    if (!khoa) {
+      setMet(null);
+      return undefined;
     }
 
-    const toStart = generateWalkingDirections(
-      from,
-      { lat: idsResult.startStop.lat, lng: idsResult.startStop.lng },
-      "Vị trí hiện tại",
-      idsResult.startStop.name
+    let conSong = true;
+    setMet(null);
+    layDuongPho(cacDiem, 'foot').then((duong) => {
+      if (conSong) setMet(duong ? duong.met : null);
+    });
+
+    return () => {
+      conSong = false;
+    };
+  }, [khoa]);
+
+  return met;
+}
+
+function chuKhoang(metThang, metPho) {
+  const thang = formatDistance(metThang);
+  if (!duongPhoHopLy(metThang, metPho)) {
+    if (metThang < 120) return `${thang}, sát trạm trên bản đồ`;
+    return `${thang} đường thẳng`;
+  }
+  return `${thang} đường thẳng, ${formatDistance(metPho)} theo phố`;
+}
+
+export default function WalkingDirections() {
+  const { ketQua, chonTramDon, setTramXem, tramXemId } = useBusStore();
+  const diemDau = ketQua?.thanhCong ? [ketQua.diemDi, ketQua.tramDon] : null;
+  const diemCuoi = ketQua?.thanhCong ? [ketQua.tramXuong, ketQua.diemDen] : null;
+  const metDauPho = useMetTheoPho(diemDau);
+  const metCuoiPho = useMetTheoPho(diemCuoi);
+
+  if (!ketQua) return null;
+
+  if (!ketQua.thanhCong) {
+    return (
+      <div className="bg-white rounded-lg border p-4 w-full">
+        <h3 className="font-bold text-gray-800 mb-2">Không tìm được đường</h3>
+        <p className="text-sm text-red-700">{ketQua.thongBao}</p>
+      </div>
     );
-
-    const fromEnd = to && idsResult.endStop ? generateWalkingDirections(
-      { lat: idsResult.endStop.lat, lng: idsResult.endStop.lng },
-      to,
-      idsResult.endStop.name,
-      "Điểm đích"
-    ) : null;
-
-    return { toStart, fromEnd };
-  }, [from, to, idsResult]);
-
-  if (!walkingInfo) {
-    return null;
   }
 
+  const doanXe = ketQua.cacDoan.filter((doan) => doan.loai === 'xe');
+  const tramGanHon = ketQua.tramKhac.find((tram) => tram.met < ketQua.metDiBoDau);
+
   return (
-    <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 max-w-md">
-      <h3 className="text-lg font-bold text-gray-800 mb-3">
-        Đi bộ
-      </h3>
+    <div className="bg-white rounded-lg border p-4 w-full">
+      <h3 className="font-bold text-gray-800 mb-2">Lộ trình</h3>
+      <p className="text-sm text-gray-700 mb-3">
+        {ketQua.tenTuyen}, {tenChieu(ketQua.chieu)}
+      </p>
 
-      <div className="mb-4 pb-4 border-b">
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-semibold text-gray-700 text-sm">
-            Tới trạm đi
-          </span>
-          <span className="text-xs text-gray-500">
-            {walkingInfo.toStart.time} phút
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          {walkingInfo.toStart.steps.map((step, idx) => (
-            <div key={idx} className="flex items-start gap-2 text-sm">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-semibold">
-                {idx + 1}
-              </div>
-              <div className="flex-1">
-                <div className="text-gray-700">{step.instruction}</div>
-                {step.distance > 0 && (
-                  <div className="text-xs text-gray-500">
-                    {formatDistance(step.distance)}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-2 p-2 bg-green-50 rounded text-xs text-green-700 font-medium">
-          {walkingInfo.toStart.summary}
-        </div>
+      <div className="text-sm space-y-2 mb-3">
+        <p>
+          <span className="font-medium">Điểm đầu đi bộ:</span> vị trí xuất phát
+        </p>
+        <p>
+          <span className="font-medium">Đi bộ tới trạm đón:</span> {ketQua.tramDon.name} ({chuKhoang(ketQua.metDiBoDau, metDauPho)})
+        </p>
+        <p>
+          <span className="font-medium">Xuống xe tại:</span> {ketQua.tramXuong.name}
+        </p>
+        <p>
+          <span className="font-medium">Điểm cuối đi bộ:</span> điểm đến, còn {chuKhoang(ketQua.metDiBoCuoi, metCuoiPho)}
+        </p>
       </div>
 
-      {walkingInfo.fromEnd && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-semibold text-gray-700 text-sm">
-              Từ trạm đến
-            </span>
-            <span className="text-xs text-gray-500">
-              {walkingInfo.fromEnd.time} phút
-            </span>
-          </div>
+      {duongPhoHopLy(ketQua.metDiBoDau, metDauPho) && metDauPho > ketQua.metDiBoDau * 1.4 && (
+        <p className="text-xs text-gray-600 mb-3">
+          IDS tính khoảng cách thẳng. Nét trên bản đồ đi theo phố, nên dài hơn khi phải qua cầu hoặc vòng đường một chiều.
+        </p>
+      )}
 
+      {tramGanHon && (
+        <p className="text-xs text-gray-600 mb-3">
+          IDS không chọn trạm gần nhất. {tramGanHon.name} gần hơn ({formatDistance(tramGanHon.met)}), nhưng lên xe ở {ketQua.tramDon.name} thì đi ít trạm hơn.
+        </p>
+      )}
+
+      {doanXe.length > 0 && (
+        <ol className="text-xs text-gray-600 list-decimal pl-4 mb-3 space-y-1">
+          {doanXe.map((doan, index) => (
+            <li key={`${doan.tu.id}-${doan.den.id}-${index}`}>
+              {doan.tu.name} đến {doan.den.name}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {ketQua.tramKhac.length > 0 && (
+        <div className="border-t pt-3">
+          <p className="text-sm font-medium text-gray-800 mb-2">Trạm khác cùng chiều</p>
           <div className="space-y-2">
-            {walkingInfo.fromEnd.steps.map((step, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-sm">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold">
-                  {idx + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="text-gray-700">{step.instruction}</div>
-                  {step.distance > 0 && (
-                    <div className="text-xs text-gray-500">
-                      {formatDistance(step.distance)}
-                    </div>
-                  )}
+            {ketQua.tramKhac.map((tram) => (
+              <div key={tram.id} className="text-xs bg-gray-50 border border-gray-200 rounded px-2 py-2">
+                <p className="font-medium">{tram.name}</p>
+                <p className="text-gray-500">Đi bộ từ điểm đi: {formatDistance(tram.met)}</p>
+                <div className="flex gap-2 mt-1">
+                  <button onClick={() => setTramXem(tram.id)} className="text-primary">
+                    {tramXemId === tram.id ? 'Ẩn đường' : 'Xem đường'}
+                  </button>
+                  <button onClick={() => chonTramDon(tram.id)} className="text-primary">
+                    Đón ở đây
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-
-          <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700 font-medium">
-            {walkingInfo.fromEnd.summary}
-          </div>
         </div>
       )}
-
-      <div className="mt-4 pt-4 border-t">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold text-gray-700">Ước tính cả đi xe</span>
-          <span className="font-bold text-primary">
-            {formatTime(
-              walkingInfo.toStart.time +
-              (walkingInfo.fromEnd?.time || 0) +
-              (idsResult.path?.length || 0) * 2
-            )}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

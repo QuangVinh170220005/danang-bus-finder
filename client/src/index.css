@@ -29,6 +29,11 @@
   z-index: 800 !important;
 }
 
+.tram-so {
+  background: transparent;
+  border: none;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }

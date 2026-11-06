@@ -1,411 +1,328 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useBusStore } from '../../store/busStore';
-import { IDSAlgorithm } from '../../algorithms/ids';
-import { BFSAlgorithm } from '../../algorithms/bfs';
-import { findNearestStop, findStopsInRadius } from '../../algorithms/graph';
+import { timDuong } from '../../algorithms/timDuong';
+import { layThuTuTram, tenChieu } from '../../algorithms/graph';
+import WalkingDirections from './WalkingDirections';
+import StatsPanel from '../Algorithm/StatsPanel';
+import IDSVisualizer from '../Algorithm/IDSVisualizer';
+
+const VI_DU = [
+  {
+    ten: 'Bến xe đi Chợ Hàn, tuyến 01 chiều đi',
+    tuyen: '01',
+    chieu: 'di',
+    di: '16.0742, 108.2290',
+    den: '16.0648, 108.2185'
+  },
+  {
+    ten: 'Hội An về bến xe, tuyến 01 chiều về',
+    tuyen: '01',
+    chieu: 've',
+    di: '15.8860, 108.3340',
+    den: '16.0738, 108.2280'
+  },
+  {
+    ten: 'Điểm quá xa, không có trạm',
+    tuyen: '01',
+    chieu: 'di',
+    di: '10.0000, 100.0000',
+    den: '16.0650, 108.2190'
+  }
+];
+
+function docToaDo(chuoi) {
+  const [lat, lng] = chuoi.split(',').map((phan) => parseFloat(phan.trim()));
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  return { lat, lng };
+}
 
 export default function Sidebar() {
   const {
     routes,
-    graph,
-    setFrom,
-    setTo,
-    setIDSResult,
-    setBFSResult,
-    isSearching,
-    setIsSearching,
-    resetSearch
+    tuyenId,
+    chieu,
+    setTuyen,
+    ketQua,
+    chuoiDi,
+    chuoiDen,
+    setChuoiDi,
+    setChuoiDen,
+    cachNhap,
+    setCachNhap,
+    setDangTim,
+    dangTim,
+    ganKetQua,
+    xoaKetQua,
+    chonTramDon,
+    setTramXem,
+    tramXemId
   } = useBusStore();
 
-  const [inputMode, setInputMode] = useState('select');
-  const [fromInput, setFromInput] = useState('16.0738, 108.2280');
-  const [toInput, setToInput] = useState('16.0650, 108.2190');
-  const [selectedFromStop, setSelectedFromStop] = useState('');
-  const [selectedToStop, setSelectedToStop] = useState('');
-  const [selectedRoute, setSelectedRoute] = useState('');
-  const [showAlternatives, setShowAlternatives] = useState(false);
-  const [alternatives, setAlternatives] = useState([]);
+  const [tramDiId, setTramDiId] = useState('');
+  const [tramDenId, setTramDenId] = useState('');
+  const [loiNhap, setLoiNhap] = useState('');
 
-  const allStops = useMemo(() => {
-    const stopMap = new Map();
-    routes.forEach(route => {
-      route.stops.forEach(stop => {
-        if (!stopMap.has(stop.id)) {
-          stopMap.set(stop.id, {
-            ...stop,
-            routes: [route.id],
-            routeName: route.name
-          });
-        } else {
-          const existing = stopMap.get(stop.id);
-          if (!existing.routes.includes(route.id)) {
-            existing.routes.push(route.id);
-          }
-        }
+  const giaTriTuyen = tuyenId ? `${tuyenId}|${chieu}` : '';
+
+  const tramTheoId = useMemo(() => {
+    const bang = {};
+    routes.forEach((route) => {
+      route.stops.forEach((stop) => {
+        bang[stop.id] = stop;
       });
     });
-    return Array.from(stopMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return bang;
   }, [routes]);
 
-  const handleSearch = () => {
-    try {
-      setIsSearching(true);
-      let fromPoint, toPoint, startStop, endStop;
+  const tuyenDangChon = routes.find((route) => route.id === tuyenId);
+  const tuyenLietKe = ketQua?.thanhCong
+    ? routes.find((route) => route.id === ketQua.tuyenId)
+    : tuyenDangChon;
+  const chieuLietKe = ketQua?.thanhCong ? ketQua.chieu : chieu;
+  const tramChieuNay = layThuTuTram(tuyenLietKe, chieuLietKe);
 
-      if (inputMode === 'select') {
-        if (!selectedFromStop || !selectedToStop) {
-          alert('Chọn trạm đi và trạm đến');
-          setIsSearching(false);
-          return;
-        }
-
-        startStop = graph.nodes[selectedFromStop];
-        endStop = graph.nodes[selectedToStop];
-
-        if (!startStop || !endStop) {
-          alert('Không có trạm này trong đồ thị');
-          setIsSearching(false);
-          return;
-        }
-
-        fromPoint = { lat: startStop.lat, lng: startStop.lng };
-        toPoint = { lat: endStop.lat, lng: endStop.lng };
-      } else {
-        const [fromLat, fromLng] = fromInput.split(',').map(s => parseFloat(s.trim()));
-        const [toLat, toLng] = toInput.split(',').map(s => parseFloat(s.trim()));
-
-        if (isNaN(fromLat) || isNaN(fromLng) || isNaN(toLat) || isNaN(toLng)) {
-          alert('Tọa độ không đúng. Ghi dạng lat, lng');
-          setIsSearching(false);
-          return;
-        }
-
-        fromPoint = { lat: fromLat, lng: fromLng };
-        toPoint = { lat: toLat, lng: toLng };
-
-        startStop = findNearestStop(fromPoint, graph.nodes, 1000);
-        endStop = findNearestStop(toPoint, graph.nodes, 1000);
-
-        if (!startStop || !endStop) {
-          alert('Không có trạm trong bán kính 1 km');
-          setIsSearching(false);
-          return;
-        }
-      }
-
-      setFrom(fromPoint);
-      setTo(toPoint);
-
-      const idsAlgo = new IDSAlgorithm(graph);
-      let idsResult;
-
-      if (selectedRoute) {
-        idsResult = idsAlgo.searchByRoute(startStop.id, selectedRoute, 20);
-      } else {
-        idsResult = idsAlgo.search(startStop.id, endStop.id, 20);
-      }
-
-      const bfsAlgo = new BFSAlgorithm(graph);
-      const bfsResult = bfsAlgo.search(startStop.id, endStop.id);
-
-      setIDSResult({ ...idsResult, startStop, endStop });
-      setBFSResult({ ...bfsResult, startStop, endStop });
-
-      if (idsResult.found) {
-        findAlternativeRoutes(fromPoint, toPoint, startStop, endStop);
-      }
-
-      setIsSearching(false);
-    } catch (error) {
-      console.error(error);
-      alert('Lỗi: ' + error.message);
-      setIsSearching(false);
+  function doiTuyen(giaTri) {
+    xoaKetQua();
+    if (!giaTri) {
+      setTuyen('', '');
+      return;
     }
-  };
+    const [id, huong] = giaTri.split('|');
+    setTuyen(id, huong);
+  }
 
-  const findAlternativeRoutes = (fromPoint, toPoint, primaryStart, primaryEnd) => {
-    try {
-      const startStops = findStopsInRadius(fromPoint, graph.nodes, 500)
-        .filter(s => s.id !== primaryStart.id)
-        .slice(0, 3);
+  function doiTramDi(giaTri) {
+    setTramDiId(giaTri);
+    const phan = giaTri.split('|');
+    if (phan.length !== 3) return;
+    setTuyen(phan[0], phan[1]);
+    xoaKetQua();
+  }
 
-      const endStops = findStopsInRadius(toPoint, graph.nodes, 500)
-        .filter(s => s.id !== primaryEnd.id)
-        .slice(0, 3);
-
-      const alternativeResults = [];
-
-      for (const start of startStops) {
-        for (const end of endStops) {
-          const idsAlgo = new IDSAlgorithm(graph);
-          const result = idsAlgo.search(start.id, end.id, 15);
-
-          if (result.found) {
-            alternativeResults.push({
-              startStop: start,
-              endStop: end,
-              walkToStart: start.distance,
-              walkFromEnd: end.distance,
-              path: result.path,
-              pathDetails: result.pathDetails,
-              totalStops: result.path.length
-            });
-          }
-        }
-      }
-
-      alternativeResults.sort((a, b) => {
-        const distA = a.walkToStart + a.walkFromEnd + a.totalStops * 500;
-        const distB = b.walkToStart + b.walkFromEnd + b.totalStops * 500;
-        return distA - distB;
-      });
-
-      setAlternatives(alternativeResults.slice(0, 3));
-      if (alternativeResults.length > 0) {
-        setShowAlternatives(true);
-      }
-    } catch (error) {
-      console.error(error);
+  function layHaiDiem() {
+    if (cachNhap === 'tram') {
+      const idDi = tramDiId.split('|')[2];
+      const di = tramTheoId[idDi];
+      const den = tramTheoId[tramDenId];
+      if (!di || !den) return { loi: 'Chọn trạm đi và trạm đến.' };
+      if (di.id === den.id) return { loi: 'Trạm đi và trạm đến đang trùng nhau.' };
+      return {
+        diemDi: { lat: di.lat, lng: di.lng },
+        diemDen: { lat: den.lat, lng: den.lng }
+      };
     }
-  };
+
+    const diemDi = docToaDo(chuoiDi);
+    const diemDen = docToaDo(chuoiDen);
+    if (!diemDi) return { loi: 'Tọa độ điểm đi chưa đúng. Viết dạng 16.07, 108.22' };
+    if (!diemDen) return { loi: 'Tọa độ điểm đến chưa đúng. Viết dạng 16.06, 108.21' };
+    return { diemDi, diemDen };
+  }
+
+  function chayVoiDiem(diemDi, diemDen, tuyen, huong) {
+    const yeuCauMoi = { tuyenId: tuyen, chieu: huong, diemDi, diemDen };
+    useBusStore.setState({ yeuCau: yeuCauMoi });
+    const ketQuaMoi = timDuong({ routes, ...yeuCauMoi, tramDonId: '' });
+    ganKetQua(ketQuaMoi);
+    setDangTim(false);
+  }
+
+  function chayTim() {
+    const diem = layHaiDiem();
+    if (diem.loi) {
+      setLoiNhap(diem.loi);
+      return;
+    }
+
+    setLoiNhap('');
+    setDangTim(true);
+    chayVoiDiem(diem.diemDi, diem.diemDen, tuyenId, chieu);
+  }
+
+  function chayViDu(mau) {
+    setCachNhap('toaDo');
+    setChuoiDi(mau.di);
+    setChuoiDen(mau.den);
+    useBusStore.setState({ diemKeTiep: 'di' });
+    setTuyen(mau.tuyen, mau.chieu);
+    setLoiNhap('');
+    setDangTim(true);
+    chayVoiDiem(docToaDo(mau.di), docToaDo(mau.den), mau.tuyen, mau.chieu);
+  }
 
   return (
     <div className="w-96 bg-white shadow-lg overflow-y-auto flex flex-col">
-      <div className="p-6 bg-gradient-to-r from-primary to-blue-600 text-white">
-        <h1 className="text-2xl font-bold mb-2">Xe buýt Đà Nẵng</h1>
-        <p className="text-sm opacity-90">Tìm đường bằng IDS</p>
+      <div className="p-5 bg-primary text-white">
+        <h1 className="text-xl font-bold">Tìm xe buýt Đà Nẵng</h1>
+        <p className="text-sm opacity-90 mt-1">Bấm bản đồ để đặt điểm, rồi bấm Tìm đường.</p>
       </div>
 
-      <div className="p-6 space-y-4 flex-1">
-        <div className="flex gap-2 mb-4">
+      <div className="p-5 space-y-4">
+        <div className="flex gap-2">
           <button
-            onClick={() => setInputMode('select')}
-            className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              inputMode === 'select'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            Chọn trạm
-          </button>
-          <button
-            onClick={() => setInputMode('coords')}
-            className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              inputMode === 'coords'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            onClick={() => setCachNhap('toaDo')}
+            className={`flex-1 px-3 py-2 rounded text-sm ${cachNhap === 'toaDo' ? 'bg-primary text-white' : 'bg-gray-100'}`}
           >
             Nhập tọa độ
           </button>
+          <button
+            onClick={() => setCachNhap('tram')}
+            className={`flex-1 px-3 py-2 rounded text-sm ${cachNhap === 'tram' ? 'bg-primary text-white' : 'bg-gray-100'}`}
+          >
+            Chọn trạm
+          </button>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Lọc tuyến
-          </label>
+        <label className="block text-sm">
+          <span className="font-medium text-gray-700">Tuyến và chiều</span>
           <select
-            value={selectedRoute}
-            onChange={(e) => setSelectedRoute(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            value={giaTriTuyen}
+            onChange={(event) => doiTuyen(event.target.value)}
+            className="mt-1 w-full border border-gray-300 rounded px-3 py-2"
           >
-            <option value="">Mọi tuyến</option>
-            {routes.map(route => (
-              <option key={route.id} value={route.id}>
-                Tuyến {route.id}: {route.from} - {route.to}
-              </option>
+            <option value="">Tất cả tuyến</option>
+            {routes.map((route) => (
+              <optgroup key={route.id} label={`Tuyến ${route.id}`}>
+                <option value={`${route.id}|di`}>Chiều đi: {route.from} đến {route.to}</option>
+                <option value={`${route.id}|ve`}>Chiều về: {route.to} đến {route.from}</option>
+              </optgroup>
             ))}
           </select>
-        </div>
+        </label>
 
-        {inputMode === 'select' && (
+        {cachNhap === 'toaDo' ? (
           <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Trạm đi
-              </label>
+            <label className="block text-sm">
+              <span className="font-medium text-gray-700">Điểm đi (lat, lng)</span>
+              <input
+                value={chuoiDi}
+                onChange={(event) => setChuoiDi(event.target.value)}
+                className="mt-1 w-full border border-gray-300 rounded px-3 py-2"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-gray-700">Điểm đến (lat, lng)</span>
+              <input
+                value={chuoiDen}
+                onChange={(event) => setChuoiDen(event.target.value)}
+                className="mt-1 w-full border border-gray-300 rounded px-3 py-2"
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="block text-sm">
+              <span className="font-medium text-gray-700">Trạm đi</span>
               <select
-                value={selectedFromStop}
-                onChange={(e) => setSelectedFromStop(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm"
+                value={tramDiId}
+                onChange={(event) => doiTramDi(event.target.value)}
+                className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
               >
                 <option value="">Chọn trạm đi</option>
-                {allStops.map(stop => (
-                  <option key={stop.id} value={stop.id}>
-                    {stop.name} (tuyến {stop.routes.join(', ')})
-                  </option>
+                {routes.map((route) => (
+                  <optgroup key={`${route.id}-di`} label={`Tuyến ${route.id} chiều đi`}>
+                    {route.stops.map((stop, index) => (
+                      <option key={`di-${stop.id}`} value={`${route.id}|di|${stop.id}`}>
+                        {index + 1}. {stop.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                {routes.map((route) => (
+                  <optgroup key={`${route.id}-ve`} label={`Tuyến ${route.id} chiều về`}>
+                    {[...route.stops].reverse().map((stop, index) => (
+                      <option key={`ve-${stop.id}`} value={`${route.id}|ve|${stop.id}`}>
+                        {index + 1}. {stop.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                {allStops.length} trạm
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Trạm đến
-              </label>
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-gray-700">Trạm đến</span>
               <select
-                value={selectedToStop}
-                onChange={(e) => setSelectedToStop(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm"
+                value={tramDenId}
+                onChange={(event) => setTramDenId(event.target.value)}
+                className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
               >
                 <option value="">Chọn trạm đến</option>
-                {allStops.map(stop => (
-                  <option key={stop.id} value={stop.id}>
-                    {stop.name} (tuyến {stop.routes.join(', ')})
-                  </option>
+                {routes.map((route) => (
+                  <optgroup key={`${route.id}-den`} label={`Tuyến ${route.id}`}>
+                    {route.stops.map((stop) => (
+                      <option key={`den-${stop.id}`} value={stop.id}>
+                        {stop.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
-            </div>
+            </label>
           </>
         )}
 
-        {inputMode === 'coords' && (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Điểm đi (lat, lng)
-              </label>
-              <input
-                type="text"
-                value={fromInput}
-                onChange={(e) => setFromInput(e.target.value)}
-                placeholder="16.0738, 108.2280"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Điểm đến (lat, lng)
-              </label>
-              <input
-                type="text"
-                value={toInput}
-                onChange={(e) => setToInput(e.target.value)}
-                placeholder="16.0650, 108.2190"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-            </div>
-          </>
-        )}
+        {loiNhap && <p className="text-sm text-red-700">{loiNhap}</p>}
 
         <div className="flex gap-2">
           <button
-            onClick={handleSearch}
-            disabled={isSearching}
-            className="flex-1 bg-primary text-white px-4 py-3 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            onClick={chayTim}
+            disabled={dangTim}
+            className="flex-1 bg-primary text-white rounded px-4 py-3 font-medium disabled:opacity-50"
           >
-            {isSearching ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Đang tìm
-              </>
-            ) : (
-              'Tìm đường'
-            )}
+            {dangTim ? 'Đang tìm' : 'Tìm đường'}
           </button>
-
-          <button
-            onClick={resetSearch}
-            className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
+          <button onClick={xoaKetQua} className="px-4 py-3 border border-gray-300 rounded">
             Xóa
           </button>
         </div>
 
-        <div className="pt-4 border-t">
-          <p className="text-sm font-medium text-gray-700 mb-2">Điền nhanh điểm đi</p>
-          <div className="space-y-1 text-xs">
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">Ví dụ để thử</p>
+          {VI_DU.map((mau) => (
             <button
-              onClick={() => setFromInput('16.0738, 108.2280')}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
+              key={mau.ten}
+              onClick={() => chayViDu(mau)}
+              className="block w-full text-left text-sm px-2 py-1 rounded hover:bg-gray-100"
             >
-              Bến xe Đà Nẵng
+              {mau.ten}
             </button>
-            <button
-              onClick={() => setFromInput('16.0650, 108.2190')}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
-            >
-              Chợ Hàn
-            </button>
-            <button
-              onClick={() => setFromInput('16.0610, 108.2270')}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
-            >
-              Cầu Rồng
-            </button>
-            <button
-              onClick={() => setFromInput('16.0410, 108.2480')}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 rounded"
-            >
-              Mỹ Khê
-            </button>
-          </div>
+          ))}
         </div>
 
-        <div className="pt-4 border-t">
-          <p className="text-xs text-gray-500">
-            Nhập hai điểm trong Đà Nẵng. App lấy trạm gần nhất rồi chạy IDS.
-          </p>
-        </div>
+        <WalkingDirections />
+        <StatsPanel />
 
-        {showAlternatives && alternatives.length > 0 && (
-          <div className="pt-4 border-t">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-gray-700">
-                Đường khác ({alternatives.length})
-              </p>
-              <button
-                onClick={() => setShowAlternatives(false)}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                Ẩn
-              </button>
-            </div>
-            <div className="space-y-2">
-              {alternatives.map((alt, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-blue-50 rounded-lg border border-blue-200 text-xs"
-                >
-                  <div className="font-medium text-blue-900 mb-1">
-                    Phương án {idx + 2}
-                  </div>
-                  <div className="space-y-1 text-blue-700">
-                    <div>
-                      Đi bộ {Math.round(alt.walkToStart)} m tới {alt.startStop.name}
-                    </div>
-                    <div>
-                      {alt.totalStops} trạm, {alt.pathDetails?.length || 0} đoạn
-                    </div>
-                    <div>
-                      Đi bộ {Math.round(alt.walkFromEnd)} m từ {alt.endStop.name}
-                    </div>
-                    <div className="pt-1 border-t border-blue-300 mt-2 font-medium">
-                      Khoảng {Math.round((alt.walkToStart + alt.walkFromEnd) / 83 + alt.totalStops * 2)} phút
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {tuyenLietKe && (
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium text-gray-800 mb-2">
+              Tuyến {tuyenLietKe.id}, {tenChieu(chieuLietKe)}
+            </p>
+            <ol className="text-sm text-gray-700 space-y-1">
+              {tramChieuNay.map((stop, index) => {
+                const laThayThe = ketQua?.thanhCong && ketQua.tramKhac.some((tram) => tram.id === stop.id);
+                const dangDeXuat = ketQua?.thanhCong && ketQua.tramDon.id === stop.id;
+                return (
+                  <li key={stop.id} className="flex items-center justify-between gap-2">
+                    <span>{index + 1}. {stop.name}</span>
+                    {dangDeXuat && <span className="text-xs text-green-700 shrink-0">Đề xuất</span>}
+                    {laThayThe && (
+                      <span className="shrink-0 space-x-2">
+                        <button onClick={() => setTramXem(stop.id)} className="text-xs text-primary">
+                          {tramXemId === stop.id ? 'Ẩn' : 'Xem'}
+                        </button>
+                        <button onClick={() => chonTramDon(stop.id)} className="text-xs text-primary">
+                          Đón
+                        </button>
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         )}
 
-        <div className="pt-4 border-t">
-          <p className="text-sm font-medium text-gray-700 mb-2">
-            {routes.length} tuyến
-          </p>
-          <div className="space-y-1">
-            {routes.map((route) => (
-              <div key={route.id} className="text-xs text-gray-600">
-                <span className="font-semibold text-primary">Tuyến {route.id}:</span>{' '}
-                {route.stops.length} trạm
-              </div>
-            ))}
-          </div>
-        </div>
+        <IDSVisualizer />
       </div>
     </div>
   );

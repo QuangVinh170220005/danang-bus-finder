@@ -1,57 +1,91 @@
 import { create } from 'zustand';
+import { timDuong } from '../algorithms/timDuong';
 
-export const useBusStore = create((set) => ({
+export const useBusStore = create((set, get) => ({
   routes: [],
-  stops: [],
-  graph: { nodes: {}, edges: {} },
-
-  from: null,
-  to: null,
-  selectedRoute: null,
+  tuyenId: '01',
+  chieu: 'di',
+  yeuCau: null,
+  ketQua: null,
+  chuoiDi: '16.0742, 108.2290',
+  chuoiDen: '16.0648, 108.2185',
+  diemKeTiep: 'di',
+  cachNhap: 'toaDo',
+  tramXemId: null,
 
   idsResult: null,
   bfsResult: null,
-  isSearching: false,
-  searchError: null,
+  dangTim: false,
 
   currentStep: 0,
   isPlaying: false,
-  playbackSpeed: 500,
+  playbackSpeed: 700,
 
   setRoutes: (routes) => set({ routes }),
-  setStops: (stops) => set({ stops }),
-  setGraph: (graph) => set({ graph }),
+  setTuyen: (tuyenId, chieu) => set({ tuyenId, chieu }),
+  setChuoiDi: (chuoiDi) => set({ chuoiDi }),
+  setChuoiDen: (chuoiDen) => set({ chuoiDen }),
+  setCachNhap: (cachNhap) => set({ cachNhap }),
+  setTramXem: (tramId) => set({ tramXemId: get().tramXemId === tramId ? null : tramId }),
 
-  setFrom: (location) => set({ from: location }),
-  setTo: (location) => set({ to: location }),
-  setSelectedRoute: (routeId) => set({ selectedRoute: routeId }),
-
-  setIDSResult: (result) => set({ idsResult: result }),
-  setBFSResult: (result) => set({ bfsResult: result }),
-  setIsSearching: (isSearching) => set({ isSearching }),
-  setSearchError: (error) => set({ searchError: error }),
-
-  setCurrentStep: (step) => set({ currentStep: step }),
-  setIsPlaying: (isPlaying) => set({ isPlaying }),
-  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
-
-  resetSearch: () =>
+  datDiemTrenBanDo: (lat, lng) => {
+    const chuoi = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (get().diemKeTiep === 'den') {
+      set({ chuoiDen: chuoi, diemKeTiep: 'di' });
+      return;
+    }
     set({
-      from: null,
-      to: null,
+      chuoiDi: chuoi,
+      diemKeTiep: 'den',
+      yeuCau: null,
+      ketQua: null,
       idsResult: null,
       bfsResult: null,
+      tramXemId: null,
+      currentStep: 0,
+      isPlaying: false
+    });
+  },
+
+  ganKetQua: (ketQua) =>
+    set({
+      ketQua,
+      idsResult: ketQua?.ids || null,
+      bfsResult: ketQua?.bfs || null,
       currentStep: 0,
       isPlaying: false,
-      searchError: null
+      tramXemId: null
     }),
 
-  clearResults: () =>
+  chonTramDon: (tramId) => {
+    const { yeuCau, routes, ketQua } = get();
+    if (!yeuCau) return;
+
+    const tuyenCuaKetQua = ketQua?.thanhCong ? ketQua.tuyenId : yeuCau.tuyenId;
+    const chieuCuaKetQua = ketQua?.thanhCong ? ketQua.chieu : yeuCau.chieu;
+    const ketQuaMoi = timDuong({
+      routes,
+      tuyenId: tuyenCuaKetQua,
+      chieu: chieuCuaKetQua,
+      diemDi: yeuCau.diemDi,
+      diemDen: yeuCau.diemDen,
+      tramDonId: tramId
+    });
+    get().ganKetQua(ketQuaMoi);
+  },
+
+  setDangTim: (dangTim) => set({ dangTim }),
+  setCurrentStep: (step) => set({ currentStep: step }),
+  setIsPlaying: (isPlaying) => set({ isPlaying }),
+
+  xoaKetQua: () =>
     set({
+      yeuCau: null,
+      ketQua: null,
       idsResult: null,
       bfsResult: null,
       currentStep: 0,
       isPlaying: false,
-      searchError: null
+      tramXemId: null
     })
 }));

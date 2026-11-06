@@ -19,6 +19,8 @@ npm run dev
 
 Server in `Bus server listening on port 5000`. Vite in địa chỉ local, thường là http://localhost:3000.
 
+Bản đồ dùng VietMap. Cần `VITE_VIETMAP_API_KEY` trong `client/.env`. Tìm đường chạy trên trình duyệt sau khi tải danh sách tuyến.
+
 Nếu cổng 5000 đã bị chiếm, sửa `PORT` trong `server/.env` và `VITE_API_URL` trong `client/.env` cho khớp.
 
 Kiểm tra API:

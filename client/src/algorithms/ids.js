@@ -1,227 +1,158 @@
-export class IDSAlgorithm {
-  constructor(graph) {
-    this.graph = graph;
-    this.stats = {
-      nodesVisited: 0,
-      depthReached: 0,
-      timeTaken: 0,
-      iterationsCount: 0
-    };
-    this.steps = [];
+const SO_BUOC_THUONG = 200;
+const SO_NUT_TOI_DA = 12000;
+
+function sapXepCanh(a, b) {
+  if (a.loai !== b.loai) return a.loai === 'xe' ? -1 : 1;
+  return a.met - b.met;
+}
+
+export function chayIDS(doThi, batDau, ketThuc) {
+  const stats = {
+    nodesVisited: 0,
+    depthReached: 0,
+    iterationsCount: 0,
+    timeTaken: 0,
+    memoryNodes: 1,
+    maxQueueSize: 0,
+    dungSom: false
+  };
+  const steps = [];
+  const gioiHanDoSau = Math.min(18, Object.keys(doThi.nodes).length + 2);
+  const lucBatDau = performance.now();
+
+  function ghiBuoc(buoc) {
+    const buocChinh = buoc.type === 'START' || buoc.type === 'NEW_DEPTH' || buoc.type === 'SUCCESS' || buoc.type === 'FAILURE';
+    if (buocChinh || steps.length < SO_BUOC_THUONG) steps.push(buoc);
   }
 
-  search(startNodeId, goalNodeId, maxDepth = 20) {
-    this.reset();
-    const startTime = performance.now();
-
-    this.steps.push({
-      type: 'START',
-      nodeId: startNodeId,
-      goalId: goalNodeId,
-      message: `Bắt đầu từ "${this.graph.nodes[startNodeId]?.name}" đến "${this.graph.nodes[goalNodeId]?.name}"`
-    });
-
-    for (let depth = 1; depth <= maxDepth; depth++) {
-      this.stats.depthReached = depth;
-      this.stats.iterationsCount++;
-
-      this.steps.push({
-        type: 'NEW_DEPTH',
-        depth,
-        message: `Lần ${this.stats.iterationsCount}: độ sâu ${depth}`
-      });
-
-      const result = this._dls(startNodeId, goalNodeId, depth, [], new Set());
-
-      if (result.found) {
-        this.stats.timeTaken = performance.now() - startTime;
-        this.steps.push({
-          type: 'SUCCESS',
-          path: result.path,
-          message: `Tìm thấy đường sau ${this.stats.iterationsCount} lần lặp`
-        });
-
-        return {
-          found: true,
-          path: result.path,
-          pathDetails: this._buildPathDetails(result.path),
-          stats: { ...this.stats },
-          steps: this.steps
-        };
-      }
+  function timCoGioiHan(nodeId, doSauConLai, duong) {
+    if (stats.nodesVisited >= SO_NUT_TOI_DA) {
+      stats.dungSom = true;
+      return false;
     }
 
-    this.stats.timeTaken = performance.now() - startTime;
-    this.steps.push({
-      type: 'FAILURE',
-      message: `Không thấy đường sau ${this.stats.iterationsCount} lần lặp`
-    });
+    stats.nodesVisited += 1;
+    stats.memoryNodes = Math.max(stats.memoryNodes, duong.length);
 
-    return {
-      found: false,
-      stats: { ...this.stats },
-      steps: this.steps
-    };
-  }
-
-  _dls(nodeId, goalId, limit, path, visited) {
-    this.stats.nodesVisited++;
-    const node = this.graph.nodes[nodeId];
-
-    if (!node) {
-      return { found: false };
-    }
-
-    const currentPath = [...path, nodeId];
-    visited.add(nodeId);
-
-    this.steps.push({
+    const node = doThi.nodes[nodeId];
+    ghiBuoc({
       type: 'VISIT',
       nodeId,
-      nodeName: node.name,
-      depth: currentPath.length - 1,
-      limit,
-      routes: node.routes,
-      message: `Thăm ${node.name} (độ sâu ${currentPath.length - 1}/${limit})`
+      ten: node?.name || nodeId,
+      lat: node?.lat,
+      lng: node?.lng,
+      message: `Xét ${node?.name || nodeId}, độ sâu ${duong.length - 1}`
     });
 
-    if (nodeId === goalId) {
-      this.steps.push({
-        type: 'FOUND',
-        nodeId,
-        path: currentPath,
-        message: `Đích: ${node.name}`
-      });
-      return { found: true, path: currentPath };
+    if (nodeId === ketThuc) return true;
+    if (doSauConLai === 0) return false;
+
+    const cacCanh = (doThi.edges[nodeId] || [])
+      .filter((canh) => !duong.includes(canh.to))
+      .sort(sapXepCanh);
+
+    for (let i = 0; i < cacCanh.length; i++) {
+      duong.push(cacCanh[i].to);
+      if (timCoGioiHan(cacCanh[i].to, doSauConLai - 1, duong)) return true;
+      duong.pop();
     }
 
-    if (limit === 0) {
-      this.steps.push({
-        type: 'DEPTH_LIMIT',
-        nodeId,
-        message: `Hết độ sâu tại ${node.name}`
-      });
-      return { found: false };
-    }
-
-    const neighbors = (this.graph.edges[nodeId] || [])
-      .filter(e => !visited.has(e.to))
-      .sort((a, b) => {
-        if (a.type === 'bus' && b.type === 'walk') return -1;
-        if (a.type === 'walk' && b.type === 'bus') return 1;
-        return a.weight - b.weight;
-      });
-
-    for (const edge of neighbors) {
-      this.steps.push({
-        type: 'EXPLORE_EDGE',
-        from: nodeId,
-        to: edge.to,
-        weight: edge.weight,
-        edgeType: edge.type,
-        route: edge.route,
-        message: `Sang ${this.graph.nodes[edge.to]?.name} (${edge.type})`
-      });
-
-      const result = this._dls(edge.to, goalId, limit - 1, currentPath, new Set(visited));
-
-      if (result.found) {
-        return result;
-      }
-    }
-
-    this.steps.push({
-      type: 'BACKTRACK',
-      nodeId,
-      message: `Quay lui từ ${node.name}`
-    });
-
-    return { found: false };
+    return false;
   }
 
-  _buildPathDetails(path) {
-    const details = [];
+  ghiBuoc({
+    type: 'START',
+    message: 'IDS bắt đầu từ độ sâu 1. Chưa thấy đường thì tăng độ sâu.'
+  });
 
-    for (let i = 0; i < path.length - 1; i++) {
-      const fromId = path[i];
-      const toId = path[i + 1];
-      const edge = this.graph.edges[fromId]?.find(e => e.to === toId);
+  for (let doSau = 1; doSau <= gioiHanDoSau; doSau++) {
+    if (stats.dungSom) break;
 
-      if (edge) {
-        details.push({
-          from: this.graph.nodes[fromId],
-          to: this.graph.nodes[toId],
-          distance: edge.weight,
-          type: edge.type,
-          route: edge.route
+    stats.iterationsCount += 1;
+    stats.depthReached = doSau;
+    ghiBuoc({
+      type: 'NEW_DEPTH',
+      depth: doSau,
+      message: `Lần ${doSau}: chỉ được đi tối đa ${doSau} bước`
+    });
+
+    const duong = [batDau];
+    if (timCoGioiHan(batDau, doSau, duong)) {
+      stats.timeTaken = performance.now() - lucBatDau;
+      stats.depthReached = duong.length - 1;
+      ghiBuoc({
+        type: 'SUCCESS',
+        message: `Tìm thấy đường, dài ${duong.length - 1} bước`
+      });
+      return { found: true, path: duong.slice(), stats, steps };
+    }
+  }
+
+  stats.timeTaken = performance.now() - lucBatDau;
+  ghiBuoc({
+    type: 'FAILURE',
+    message: stats.dungSom ? 'Dừng vì phải xét quá nhiều nút' : 'Hết độ sâu mà chưa thấy đường'
+  });
+  return { found: false, path: [], stats, steps };
+}
+
+export function gomCacLan(steps) {
+  const cacLan = [];
+  let lanDangThu = null;
+
+  steps.forEach((step) => {
+    if (step.type === 'START') {
+      cacLan.push({
+        loai: 'batDau',
+        tieuDe: 'Cách IDS thử',
+        giaiThich: 'IDS không đi một mạch tới đích. Nó thử đi 1 bước rồi quay về điểm đi, thử 2 bước rồi quay về, cứ thế đến khi tới điểm đến.',
+        nut: []
+      });
+      return;
+    }
+
+    if (step.type === 'NEW_DEPTH') {
+      lanDangThu = {
+        loai: 'thu',
+        doSau: step.depth,
+        tieuDe: `Lần ${step.depth}: được đi ${step.depth} bước`,
+        giaiThich: 'Bắt đầu lại từ điểm đi. Hết số bước mà chưa tới điểm đến thì lần sau được đi thêm một bước. Cùng một chỗ hiện ở nhiều lần là vì vậy.',
+        nut: []
+      };
+      cacLan.push(lanDangThu);
+      return;
+    }
+
+    if (step.type === 'VISIT' && lanDangThu && step.lat != null) {
+      const daCo = lanDangThu.nut.some((nut) => nut.nodeId === step.nodeId);
+      if (!daCo) {
+        lanDangThu.nut.push({
+          nodeId: step.nodeId,
+          ten: step.ten || step.nodeId,
+          lat: step.lat,
+          lng: step.lng
         });
       }
     }
+  });
 
-    return details;
+  const ket = steps[steps.length - 1];
+  if (ket?.type === 'SUCCESS') {
+    cacLan.push({
+      loai: 'xong',
+      tieuDe: 'Tìm thấy đường',
+      giaiThich: 'Lần này đủ bước để tới điểm đến. Đường trên bản đồ là đường ít bước nhất. Các lần trước phải làm lại vì chưa đi xa được tới nơi.',
+      nut: []
+    });
+  }
+  if (ket?.type === 'FAILURE') {
+    cacLan.push({
+      loai: 'hong',
+      tieuDe: 'Không thấy đường',
+      giaiThich: ket.message,
+      nut: []
+    });
   }
 
-  reset() {
-    this.stats = {
-      nodesVisited: 0,
-      depthReached: 0,
-      timeTaken: 0,
-      iterationsCount: 0
-    };
-    this.steps = [];
-  }
-
-  searchByRoute(startNodeId, targetRoute, maxDepth = 15) {
-    this.reset();
-    const startTime = performance.now();
-
-    for (let depth = 1; depth <= maxDepth; depth++) {
-      this.stats.depthReached = depth;
-      this.stats.iterationsCount++;
-
-      const result = this._dlsByRoute(startNodeId, targetRoute, depth, [], new Set());
-
-      if (result.found) {
-        this.stats.timeTaken = performance.now() - startTime;
-        return {
-          found: true,
-          stops: result.stops,
-          stats: { ...this.stats },
-          steps: this.steps
-        };
-      }
-    }
-
-    this.stats.timeTaken = performance.now() - startTime;
-    return { found: false, stats: { ...this.stats }, steps: this.steps };
-  }
-
-  _dlsByRoute(nodeId, targetRoute, limit, path, visited) {
-    this.stats.nodesVisited++;
-    const node = this.graph.nodes[nodeId];
-
-    if (!node) return { found: false };
-
-    const currentPath = [...path, nodeId];
-    visited.add(nodeId);
-
-    if (node.routes.includes(targetRoute)) {
-      return { found: true, stops: [node] };
-    }
-
-    if (limit === 0) return { found: false };
-
-    const neighbors = (this.graph.edges[nodeId] || [])
-      .filter(e => !visited.has(e.to))
-      .sort((a, b) => a.weight - b.weight);
-
-    for (const edge of neighbors) {
-      const result = this._dlsByRoute(edge.to, targetRoute, limit - 1, currentPath, new Set(visited));
-      if (result.found) {
-        return { found: true, stops: [node, ...result.stops] };
-      }
-    }
-
-    return { found: false };
-  }
+  return cacLan;
 }

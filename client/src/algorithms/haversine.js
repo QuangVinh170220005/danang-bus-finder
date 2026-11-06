@@ -1,28 +1,19 @@
-export function haversine(point1, point2) {
-  const R = 6371e3;
-  const φ1 = (point1.lat * Math.PI) / 180;
-  const φ2 = (point2.lat * Math.PI) / 180;
-  const Δφ = ((point2.lat - point1.lat) * Math.PI) / 180;
-  const Δλ = ((point2.lng - point1.lng) * Math.PI) / 180;
+export function haversine(a, b) {
+  const banKinhTraiDat = 6371000;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const chenhLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const chenhLng = ((b.lng - a.lng) * Math.PI) / 180;
 
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const x =
+    Math.sin(chenhLat / 2) * Math.sin(chenhLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(chenhLng / 2) * Math.sin(chenhLng / 2);
+  const y = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c;
+  return banKinhTraiDat * y;
 }
 
 export function formatDistance(meters) {
-  if (meters < 1000) {
-    return `${Math.round(meters)}m`;
-  }
-  return `${(meters / 1000).toFixed(1)}km`;
-}
-
-export function estimateWalkingTime(meters) {
-  const hours = meters / 5000;
-  const minutes = Math.ceil(hours * 60);
-  return minutes;
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
 }
