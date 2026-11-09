@@ -1,0 +1,16 @@
+{
+  "name": "danang-bus-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Danang Bus Finder with IDS Search - Fullstack Monorepo",
+  "scripts": {
+    "build": "npm run build --prefix client",
+    "heroku-postbuild": "npm install --prefix client --include=dev && npm run build --prefix client && npm install --prefix server --production=false",
+    "start": "node server/src/app.js",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
