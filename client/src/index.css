@@ -9,6 +9,19 @@
   background: #aad3df !important;
 }
 
+.leaflet-gl-layer {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.leaflet-gl-layer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .leaflet-tile-pane {
   z-index: 200 !important;
 }

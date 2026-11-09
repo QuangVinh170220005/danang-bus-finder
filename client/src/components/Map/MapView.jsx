@@ -10,6 +10,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
 import L from 'leaflet';
 
+const NEN_VOYAGER = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const NEN_DU_PHONG = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 
 function GoongMapLayer({ apiKey }) {
@@ -420,15 +421,12 @@ export default function MapView() {
   return (
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
-        {goongKey ? (
-          <GoongMapLayer apiKey={goongKey} />
-        ) : (
-          <TileLayer
-            attribution={urlVietMap ? '&copy; VietMap' : 'Tiles &copy; Esri'}
-            url={urlVietMap || NEN_DU_PHONG}
-            maxZoom={20}
-          />
-        )}
+        <TileLayer
+          attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap'
+          url={NEN_VOYAGER}
+          maxZoom={20}
+        />
+        {goongKey && <GoongMapLayer apiKey={goongKey} />}
         <VuaManHinh diem={diemCanh} />
         <BatClick />
         <TatCaTram routes={routes} />
