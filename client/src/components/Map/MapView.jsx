@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { useBusStore } from '../../store/busStore';
 import { gomCacLan } from '../../algorithms/ids';
@@ -22,6 +22,10 @@ try {
 
 function GoongMapLayer({ styleUrl, onError, onSuccess }) {
   const map = useMap();
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
 
   useEffect(() => {
     if (!styleUrl) return;
@@ -52,7 +56,7 @@ function GoongMapLayer({ styleUrl, onError, onSuccess }) {
       }
       if (glMap) {
         glMap.on('load', () => {
-          onSuccess?.();
+          onSuccessRef.current?.();
         });
         // Tự động gỡ layer nếu Goong bị chặn (403, 401, CORS, domain restriction) để lộ bản đồ nền
         glMap.on('error', (e) => {
@@ -62,7 +66,7 @@ function GoongMapLayer({ styleUrl, onError, onSuccess }) {
           if (status === 403 || status === 401 || msg.includes('403') || msg.includes('unauthorized') || msg.includes('failed to fetch')) {
             console.warn('Goong Map bị chặn hoặc không tải được style, dùng bản đồ nền dự phòng:', err);
             cleanup();
-            onError?.(status === 403 ? 'blocked' : 'error');
+            onErrorRef.current?.(status === 403 ? 'blocked' : 'error');
           }
         });
       }
@@ -80,9 +84,9 @@ function GoongMapLayer({ styleUrl, onError, onSuccess }) {
     } catch (err) {
       console.warn('Lỗi tải Goong Map layer:', err);
       cleanup();
-      onError?.('error');
+      onErrorRef.current?.('error');
     }
-  }, [map, styleUrl, onError, onSuccess]);
+  }, [map, styleUrl]);
 
   return null;
 }
@@ -500,6 +504,14 @@ export default function MapView() {
   const [showStyleMenu, setShowStyleMenu] = useState(false);
   const [goongBlocked, setGoongBlocked] = useState(false);
 
+  const handleGoongError = useCallback((reason) => {
+    if (reason === 'blocked') setGoongBlocked(true);
+  }, []);
+
+  const handleGoongSuccess = useCallback(() => {
+    setGoongBlocked(false);
+  }, []);
+
   const activeStyle = MAP_STYLES[mapStyleKey] || MAP_STYLES.goong;
 
   function chonKieuBanDo(key) {
@@ -549,10 +561,8 @@ export default function MapView() {
               <GoongMapLayer
                 key={activeStyle.id}
                 styleUrl={activeStyle.styleUrl(goongKey)}
-                onError={(reason) => {
-                  if (reason === 'blocked') setGoongBlocked(true);
-                }}
-                onSuccess={() => setGoongBlocked(false)}
+                onError={handleGoongError}
+                onSuccess={handleGoongSuccess}
               />
             )}
           </>
