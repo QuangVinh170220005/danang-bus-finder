@@ -6,34 +6,72 @@ import { layThuTuTram, tenChieu } from '../../algorithms/graph';
 import { haversine } from '../../algorithms/haversine';
 import { duongPhoHopLy, layDuongPho, urlNenVietMap } from '../../services/vietmap';
 import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
 import L from 'leaflet';
 
+function GoongMapLayer({ styleUrl }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!styleUrl) return;
+    let gl = null;
+    try {
+      gl = maplibreGL({
+        style: styleUrl,
+        pane: 'tilePane'
+      });
+      gl.addTo(map);
+
+      const timer = setTimeout(() => {
+        try {
+          gl.getMaplibreMap()?.resize();
+        } catch {}
+      }, 150);
+
+      return () => {
+        clearTimeout(timer);
+        try {
+          map.removeLayer(gl);
+        } catch {}
+      };
+    } catch (err) {
+      console.warn('Lỗi tải Goong Map layer:', err);
+    }
+  }, [map, styleUrl]);
+
+  return null;
+}
+
 const MAP_STYLES = {
+  goong: {
+    id: 'goong',
+    name: 'Goong Map (Đường phố)',
+    mota: 'Bản đồ vector Goong chuẩn Việt Nam',
+    isGoong: true,
+    styleUrl: (key) => `https://tiles.goong.io/assets/goong_map_web.json?api_key=${key}`
+  },
+  goong_satellite: {
+    id: 'goong_satellite',
+    name: 'Goong Map (Vệ tinh)',
+    mota: 'Ảnh chụp vệ tinh Goong Maps',
+    isGoong: true,
+    styleUrl: (key) => `https://tiles.goong.io/assets/goong_satellite.json?api_key=${key}`
+  },
+  goong_dark: {
+    id: 'goong_dark',
+    name: 'Goong Map (Chế độ tối)',
+    mota: 'Bản đồ ban đêm Goong Maps',
+    isGoong: true,
+    styleUrl: (key) => `https://tiles.goong.io/assets/goong_map_dark.json?api_key=${key}`
+  },
   street: {
     id: 'street',
-    name: 'Đường phố',
+    name: 'Đường phố (Esri)',
     mota: 'Bản đồ giao thông sáng (Esri)',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri',
     maxZoom: 19
-  },
-  satellite: {
-    id: 'satellite',
-    name: 'Vệ tinh',
-    mota: 'Ảnh vệ tinh thực tế & tên đường',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; DigitalGlobe, GeoEye, Earthstar',
-    maxZoom: 19
-  },
-  dark: {
-    id: 'dark',
-    name: 'Chế độ tối',
-    mota: 'Tông màu đen xám hiện đại',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri',
-    maxZoom: 16
   },
   osm: {
     id: 'osm',
@@ -41,14 +79,6 @@ const MAP_STYLES = {
     mota: 'Bản đồ chi tiết ngõ hẻm',
     url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
-  },
-  topo: {
-    id: 'topo',
-    name: 'Địa hình',
-    mota: 'Độ cao đồi núi Sơn Trà',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri',
     maxZoom: 19
   }
 };
@@ -406,12 +436,14 @@ export default function MapView() {
   const tramXem = coDuong ? ketQua.tramKhac.find((tram) => tram.id === tramXemId) : null;
   const xuongSatDen = coDuong && haversine(ketQua.tramXuong, ketQua.diemDen) < 90;
 
+  const goongKey = import.meta.env.VITE_GOONG_MAP_TILES_KEY || import.meta.env.VITE_GOONG_MAP_KEY || '3WdrQw5HWtXXKRI1qkDa9t4FYRgFXA6aZX2PtYkt';
+
   const [mapStyleKey, setMapStyleKey] = useState(() => {
-    return localStorage.getItem('danang_map_style') || 'street';
+    return localStorage.getItem('danang_map_style') || 'goong';
   });
   const [showStyleMenu, setShowStyleMenu] = useState(false);
 
-  const activeStyle = MAP_STYLES[mapStyleKey] || MAP_STYLES.street;
+  const activeStyle = MAP_STYLES[mapStyleKey] || MAP_STYLES.goong;
 
   function chonKieuBanDo(key) {
     setMapStyleKey(key);
@@ -446,19 +478,14 @@ export default function MapView() {
   return (
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
-        <TileLayer
-          key={activeStyle.id}
-          attribution={activeStyle.attribution}
-          url={activeStyle.url}
-          maxZoom={activeStyle.maxZoom}
-        />
-        {activeStyle.overlayUrl && (
+        {activeStyle.isGoong ? (
+          <GoongMapLayer key={activeStyle.id} styleUrl={activeStyle.styleUrl(goongKey)} />
+        ) : (
           <TileLayer
-            key={`${activeStyle.id}-overlay`}
-            url={activeStyle.overlayUrl}
+            key={activeStyle.id}
+            attribution={activeStyle.attribution}
+            url={activeStyle.url}
             maxZoom={activeStyle.maxZoom}
-            pane="overlayPane"
-            opacity={0.9}
           />
         )}
         <VuaManHinh diem={diemCanh} />
