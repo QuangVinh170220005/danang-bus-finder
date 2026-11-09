@@ -478,15 +478,15 @@ export default function MapView() {
   return (
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
-        {activeStyle.isGoong ? (
+        {/* Bản đồ nền luôn sẵn sàng để không bao giờ bị trắng màn hình */}
+        <TileLayer
+          attribution='Tiles &copy; Esri &mdash; Source: Esri'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
+        />
+        {/* Nếu chọn kiểu Goong Map, nạp lớp vector của Goong đè lên */}
+        {activeStyle.isGoong && (
           <GoongMapLayer key={activeStyle.id} styleUrl={activeStyle.styleUrl(goongKey)} />
-        ) : (
-          <TileLayer
-            key={activeStyle.id}
-            attribution={activeStyle.attribution}
-            url={activeStyle.url}
-            maxZoom={activeStyle.maxZoom}
-          />
         )}
         <VuaManHinh diem={diemCanh} />
         <BatClick />
