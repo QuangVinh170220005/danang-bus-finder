@@ -8,7 +8,14 @@ import { duongPhoHopLy, layDuongPho, urlNenVietMap } from '../../services/vietma
 import 'leaflet/dist/leaflet.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
+import { setWorkerUrl } from 'maplibre-gl';
 import L from 'leaflet';
+
+try {
+  setWorkerUrl('https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl-worker.mjs');
+} catch (e) {
+  console.warn('Lỗi cấu hình maplibre worker:', e);
+}
 
 function GoongMapLayer({ styleUrl }) {
   const map = useMap();
