@@ -50,7 +50,7 @@ export const useBusStore = create((set, get) => ({
   streetLines: null,
   idsSpeed: 300,
   idsMaxDepth: 25,
-  idsTargetType: 'route_stop', // 'route_stop' | 'destination' | 'nearest_station'
+  idsTargetType: 'destination', // 'route_stop' | 'destination' | 'nearest_station'
   idsStatusText: '',
 
   currentStep: 0,

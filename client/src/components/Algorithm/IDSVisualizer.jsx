@@ -48,8 +48,8 @@ export default function IDSVisualizer() {
           disabled={idsSimulating}
           className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 bg-white disabled:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="route_stop">Trạm xe buýt trên Tuyến {tuyenId || 'đang chọn'}</option>
           <option value="destination">Điểm đến đã chọn (B)</option>
+          <option value="route_stop">Trạm xe buýt trên Tuyến {tuyenId || 'đang chọn'}</option>
           <option value="nearest_station">Bến xe bất kỳ gần nhất</option>
         </select>
       </label>
