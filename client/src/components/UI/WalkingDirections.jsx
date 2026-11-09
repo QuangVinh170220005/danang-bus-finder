@@ -31,12 +31,8 @@ function useMetTheoPho(cacDiem) {
 }
 
 function chuKhoang(metThang, metPho) {
-  const thang = formatDistance(metThang);
-  if (!duongPhoHopLy(metThang, metPho)) {
-    if (metThang < 120) return `${thang}, sát trạm trên bản đồ`;
-    return `${thang} đường thẳng`;
-  }
-  return `${thang} đường thẳng, ${formatDistance(metPho)} theo phố`;
+  if (metPho != null) return `${formatDistance(metPho)} (theo đường phố)`;
+  return `${formatDistance(metThang)}`;
 }
 
 export default function WalkingDirections() {
@@ -81,12 +77,6 @@ export default function WalkingDirections() {
           <span className="font-medium">Điểm cuối đi bộ:</span> điểm đến, còn {chuKhoang(ketQua.metDiBoCuoi, metCuoiPho)}
         </p>
       </div>
-
-      {duongPhoHopLy(ketQua.metDiBoDau, metDauPho) && metDauPho > ketQua.metDiBoDau * 1.4 && (
-        <p className="text-xs text-gray-600 mb-3">
-          IDS tính khoảng cách thẳng. Nét trên bản đồ đi theo phố, nên dài hơn khi phải qua cầu hoặc vòng đường một chiều.
-        </p>
-      )}
 
       {tramGanHon && (
         <p className="text-xs text-gray-600 mb-3">

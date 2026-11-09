@@ -1,34 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useBusStore } from '../../store/busStore';
-import { timDuong } from '../../algorithms/timDuong';
 import { layThuTuTram, tenChieu } from '../../algorithms/graph';
-import WalkingDirections from './WalkingDirections';
-import StatsPanel from '../Algorithm/StatsPanel';
+import { goiYTuyen, capNhatQuangDuongPho } from '../../algorithms/goiYTuyen';
+import { haversine } from '../../algorithms/haversine';
 import IDSVisualizer from '../Algorithm/IDSVisualizer';
-
-const VI_DU = [
-  {
-    ten: 'Bến xe đi Chợ Hàn, tuyến 01 chiều đi',
-    tuyen: '01',
-    chieu: 'di',
-    di: '16.0742, 108.2290',
-    den: '16.0648, 108.2185'
-  },
-  {
-    ten: 'Hội An về bến xe, tuyến 01 chiều về',
-    tuyen: '01',
-    chieu: 've',
-    di: '15.8860, 108.3340',
-    den: '16.0738, 108.2280'
-  },
-  {
-    ten: 'Điểm quá xa, không có trạm',
-    tuyen: '01',
-    chieu: 'di',
-    di: '10.0000, 100.0000',
-    den: '16.0650, 108.2190'
-  }
-];
 
 function docToaDo(chuoi) {
   const [lat, lng] = chuoi.split(',').map((phan) => parseFloat(phan.trim()));
@@ -55,14 +30,21 @@ export default function Sidebar() {
     xoaKetQua,
     chonTramDon,
     setTramXem,
-    tramXemId
+    tramXemId,
+    goiY,
+    tuyenChon,
+    chonViTri,
+    cheDoChon,
+    setCheDoChon,
+    batCheDoChonViTri,
+    viTriBatKy,
+    ganNhat
   } = useBusStore();
 
   const [tramDiId, setTramDiId] = useState('');
   const [tramDenId, setTramDenId] = useState('');
   const [loiNhap, setLoiNhap] = useState('');
-
-  const giaTriTuyen = tuyenId ? `${tuyenId}|${chieu}` : '';
+  const [banKinh, setBanKinh] = useState(800);
 
   const tramTheoId = useMemo(() => {
     const bang = {};
@@ -80,16 +62,6 @@ export default function Sidebar() {
     : tuyenDangChon;
   const chieuLietKe = ketQua?.thanhCong ? ketQua.chieu : chieu;
   const tramChieuNay = layThuTuTram(tuyenLietKe, chieuLietKe);
-
-  function doiTuyen(giaTri) {
-    xoaKetQua();
-    if (!giaTri) {
-      setTuyen('', '');
-      return;
-    }
-    const [id, huong] = giaTri.split('|');
-    setTuyen(id, huong);
-  }
 
   function doiTramDi(giaTri) {
     setTramDiId(giaTri);
@@ -119,45 +91,92 @@ export default function Sidebar() {
     return { diemDi, diemDen };
   }
 
-  function chayVoiDiem(diemDi, diemDen, tuyen, huong) {
-    const yeuCauMoi = { tuyenId: tuyen, chieu: huong, diemDi, diemDen };
-    useBusStore.setState({ yeuCau: yeuCauMoi });
-    const ketQuaMoi = timDuong({ routes, ...yeuCauMoi, tramDonId: '' });
-    ganKetQua(ketQuaMoi);
-    setDangTim(false);
-  }
-
-  function chayTim() {
+  function chayGoiY(banKinhMoi) {
     const diem = layHaiDiem();
     if (diem.loi) {
       setLoiNhap(diem.loi);
       return;
     }
-
     setLoiNhap('');
-    setDangTim(true);
-    chayVoiDiem(diem.diemDi, diem.diemDen, tuyenId, chieu);
+    const bk = typeof banKinhMoi === 'number' ? banKinhMoi : banKinh;
+    const ds = goiYTuyen(routes, diem.diemDi, diem.diemDen, bk);
+    const tramGanNhat = (d) => Math.min(...routes.flatMap((r) => r.stops.map((s) => haversine(d, s))));
+    useBusStore.setState({
+      goiY: {
+        diemDi: diem.diemDi,
+        diemDen: diem.diemDen,
+        ds,
+        banKinh: bk,
+        metGanA: Math.round(tramGanNhat(diem.diemDi)),
+        metGanB: Math.round(tramGanNhat(diem.diemDen))
+      },
+      tuyenChon: null,
+      ketQua: null,
+      idsResult: null,
+      bfsResult: null,
+      yeuCau: null,
+      viTriBatKy: null,
+      ganNhat: null,
+      chonViTri: false
+    });
   }
 
-  function chayViDu(mau) {
-    setCachNhap('toaDo');
-    setChuoiDi(mau.di);
-    setChuoiDen(mau.den);
-    useBusStore.setState({ diemKeTiep: 'di' });
-    setTuyen(mau.tuyen, mau.chieu);
-    setLoiNhap('');
-    setDangTim(true);
-    chayVoiDiem(docToaDo(mau.di), docToaDo(mau.den), mau.tuyen, mau.chieu);
+  function chonGoiY(g) {
+    setTuyen(g.route.id, g.chieu);
+    useBusStore.setState({
+      ketQua: null,
+      idsResult: null,
+      bfsResult: null,
+      yeuCau: null,
+      viTriBatKy: null,
+      ganNhat: null,
+      chonViTri: false,
+      tramXemId: null,
+      currentStep: 0,
+      isPlaying: false,
+      tuyenChon: {
+        tuyenId: g.route.id,
+        chieu: g.chieu,
+        i: g.i,
+        j: g.j,
+        metDi: g.metDi,
+        metDen: g.metDen,
+        diemDi: goiY.diemDi,
+        diemDen: goiY.diemDen
+      }
+    });
+
+    // Cập nhật quãng đường đi bộ thực tế theo các tuyến phố
+    capNhatQuangDuongPho(g, goiY.diemDi, goiY.diemDen).then((capNhat) => {
+      const tc = useBusStore.getState().tuyenChon;
+      if (tc && tc.tuyenId === g.route.id && tc.chieu === g.chieu) {
+        useBusStore.setState({
+          tuyenChon: {
+            ...tc,
+            metDi: capNhat.metDi,
+            metDen: capNhat.metDen,
+            toaDoDi: capNhat.toaDoDi,
+            toaDoDen: capNhat.toaDoDen
+          }
+        });
+      }
+    });
+  }
+
+  function xoaTatCa() {
+    xoaKetQua();
+    useBusStore.setState({ goiY: null });
   }
 
   return (
     <div className="w-96 bg-white shadow-lg overflow-y-auto flex flex-col">
       <div className="p-5 bg-primary text-white">
         <h1 className="text-xl font-bold">Tìm xe buýt Đà Nẵng</h1>
-        <p className="text-sm opacity-90 mt-1">Bấm bản đồ để đặt điểm, rồi bấm Tìm đường.</p>
+        <p className="text-sm opacity-90 mt-1">Chọn điểm đầu và điểm cuối, chọn tuyến, rồi chọn vị trí bất kỳ.</p>
       </div>
 
       <div className="p-5 space-y-4">
+        <p className="text-sm font-bold text-gray-800">1. Chọn điểm đầu (A) và điểm cuối (B)</p>
         <div className="flex gap-2">
           <button
             onClick={() => setCachNhap('toaDo')}
@@ -173,25 +192,22 @@ export default function Sidebar() {
           </button>
         </div>
 
-        <label className="block text-sm">
-          <span className="font-medium text-gray-700">Tuyến và chiều</span>
-          <select
-            value={giaTriTuyen}
-            onChange={(event) => doiTuyen(event.target.value)}
-            className="mt-1 w-full border border-gray-300 rounded px-3 py-2"
-          >
-            <option value="">Tất cả tuyến</option>
-            {routes.map((route) => (
-              <optgroup key={route.id} label={`Tuyến ${route.id}`}>
-                <option value={`${route.id}|di`}>Chiều đi: {route.from} đến {route.to}</option>
-                <option value={`${route.id}|ve`}>Chiều về: {route.to} đến {route.from}</option>
-              </optgroup>
-            ))}
-          </select>
-        </label>
-
         {cachNhap === 'toaDo' ? (
           <>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCheDoChon(cheDoChon === 'di' ? null : 'di')}
+                className={`flex-1 px-3 py-2 rounded text-sm border ${cheDoChon === 'di' ? 'bg-green-600 text-white border-green-600' : 'bg-white border-gray-300'}`}
+              >
+                {cheDoChon === 'di' ? 'Bấm lên bản đồ...' : 'Chọn điểm đi trên bản đồ'}
+              </button>
+              <button
+                onClick={() => setCheDoChon(cheDoChon === 'den' ? null : 'den')}
+                className={`flex-1 px-3 py-2 rounded text-sm border ${cheDoChon === 'den' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-gray-300'}`}
+              >
+                {cheDoChon === 'den' ? 'Bấm lên bản đồ...' : 'Chọn điểm đến trên bản đồ'}
+              </button>
+            </div>
             <label className="block text-sm">
               <span className="font-medium text-gray-700">Điểm đi (lat, lng)</span>
               <input
@@ -263,34 +279,92 @@ export default function Sidebar() {
 
         {loiNhap && <p className="text-sm text-red-700">{loiNhap}</p>}
 
+        <label className="flex items-center justify-between gap-2 text-sm text-gray-700">
+          Đi bộ tối đa
+          <span className="flex items-center gap-2">
+            <input
+              type="range"
+              min="200"
+              max="2000"
+              step="100"
+              value={banKinh}
+              onChange={(event) => {
+                const gia = +event.target.value;
+                setBanKinh(gia);
+                if (goiY) chayGoiY(gia);
+              }}
+            />
+            <b className="w-14 text-right">{banKinh} m</b>
+          </span>
+        </label>
+
         <div className="flex gap-2">
           <button
-            onClick={chayTim}
-            disabled={dangTim}
-            className="flex-1 bg-primary text-white rounded px-4 py-3 font-medium disabled:opacity-50"
+            onClick={chayGoiY}
+            className="flex-1 bg-primary text-white rounded px-4 py-3 font-medium"
           >
-            {dangTim ? 'Đang tìm' : 'Tìm đường'}
+            Gợi ý các tuyến từ A đến B
           </button>
-          <button onClick={xoaKetQua} className="px-4 py-3 border border-gray-300 rounded">
+          <button onClick={xoaTatCa} className="px-4 py-3 border border-gray-300 rounded">
             Xóa
           </button>
         </div>
 
-        <div>
-          <p className="text-sm font-medium text-gray-700 mb-1">Ví dụ để thử</p>
-          {VI_DU.map((mau) => (
-            <button
-              key={mau.ten}
-              onClick={() => chayViDu(mau)}
-              className="block w-full text-left text-sm px-2 py-1 rounded hover:bg-gray-100"
-            >
-              {mau.ten}
-            </button>
-          ))}
-        </div>
+        {goiY && (
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-gray-800">2. Chọn một tuyến</p>
+            <p className="text-sm text-gray-700">
+              {goiY.ds.length
+                ? `Có ${goiY.ds.length} lựa chọn. Bấm một tuyến để xem trên bản đồ.`
+                : `Không có tuyến nào đi được từ A đến B trong vòng ${goiY.banKinh} m đi bộ. Trạm gần A nhất cách khoảng ${goiY.metGanA} m, trạm gần B nhất cách khoảng ${goiY.metGanB} m. Bạn thử tăng "Đi bộ tối đa" hoặc chọn điểm gần các trục đường chính.`}
+            </p>
+            {goiY.ds.map((g) => {
+              const dangChon = tuyenChon && tuyenChon.tuyenId === g.route.id && tuyenChon.chieu === g.chieu;
+              const thuTu = layThuTuTram(g.route, g.chieu);
+              const metDiHienThi = dangChon && tuyenChon.metDi ? tuyenChon.metDi : g.metDi;
+              const metDenHienThi = dangChon && tuyenChon.metDen ? tuyenChon.metDen : g.metDen;
+              return (
+                <button
+                  key={`${g.route.id}-${g.chieu}`}
+                  onClick={() => chonGoiY(g)}
+                  className={`block w-full text-left text-sm border rounded px-3 py-2 ${dangChon ? 'border-primary bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                >
+                  <span className="font-semibold">Tuyến {g.route.id}</span>, {tenChieu(g.chieu)}
+                  <br />
+                  <span className="text-xs text-gray-600">
+                    Lên: {thuTu[g.i].name} (đi bộ {Math.round(metDiHienThi)} m)
+                    <br />
+                    Xuống: {thuTu[g.j].name} (đi bộ {Math.round(metDenHienThi)} m), {g.j - g.i} trạm
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        <WalkingDirections />
-        <StatsPanel />
+        {tuyenChon && (
+          <div className="border rounded p-3 space-y-2">
+            <p className="text-sm font-bold text-gray-800">3. Chọn một vị trí bất kỳ</p>
+            <button
+              onClick={() => batCheDoChonViTri(!chonViTri)}
+              className={`w-full rounded px-3 py-2 text-sm ${chonViTri ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
+            >
+              {chonViTri ? 'Bấm lên bản đồ để chọn vị trí...' : 'Chọn vị trí bất kỳ, tìm trạm gần nhất'}
+            </button>
+            {viTriBatKy && ganNhat?.dangTinh && <p className="text-xs text-gray-600">Đang tìm đường đi bộ theo phố...</p>}
+            {ganNhat?.loi && <p className="text-xs text-red-700">{ganNhat.loi}</p>}
+            {ganNhat?.tram && (
+              <p className="text-sm text-gray-800">
+                Trạm gần nhất trên tuyến {ganNhat.tuyenId}: <b>{ganNhat.tram.name}</b>
+                <br />
+                Quãng đường đi bộ: <b>{Math.round(ganNhat.met)} m</b> (theo đường phố thực tế)
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Mô phỏng thuật toán Iterative Deepening Search (IDS) trực quan giống trang mẫu */}
+        <IDSVisualizer />
 
         {tuyenLietKe && (
           <div className="border-t pt-4">
@@ -301,9 +375,12 @@ export default function Sidebar() {
               {tramChieuNay.map((stop, index) => {
                 const laThayThe = ketQua?.thanhCong && ketQua.tramKhac.some((tram) => tram.id === stop.id);
                 const dangDeXuat = ketQua?.thanhCong && ketQua.tramDon.id === stop.id;
+                const trongDoan = !ketQua?.thanhCong && tuyenChon && tuyenChon.tuyenId === tuyenLietKe.id && tuyenChon.chieu === chieuLietKe && index >= tuyenChon.i && index <= tuyenChon.j;
                 return (
-                  <li key={stop.id} className="flex items-center justify-between gap-2">
+                  <li key={stop.id} className={`flex items-center justify-between gap-2 ${trongDoan ? 'font-semibold text-primary' : ''}`}>
                     <span>{index + 1}. {stop.name}</span>
+                    {trongDoan && index === tuyenChon.i && <span className="text-xs text-green-700 shrink-0">Lên xe</span>}
+                    {trongDoan && index === tuyenChon.j && <span className="text-xs text-amber-700 shrink-0">Xuống xe</span>}
                     {dangDeXuat && <span className="text-xs text-green-700 shrink-0">Đề xuất</span>}
                     {laThayThe && (
                       <span className="shrink-0 space-x-2">
@@ -321,8 +398,6 @@ export default function Sidebar() {
             </ol>
           </div>
         )}
-
-        <IDSVisualizer />
       </div>
     </div>
   );

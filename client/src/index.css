@@ -82,3 +82,120 @@
 .step-log-depth {
   @apply bg-yellow-50 text-yellow-700 border-l-2 border-yellow-400 font-medium;
 }
+
+/* Điểm xuất phát và điểm đến dạng SVG Pin to rõ, có hiệu ứng sóng lan */
+.diem-dau-cuoi {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.pro-pin-wrapper {
+  position: relative;
+  width: 40px;
+  height: 52px;
+}
+
+.pin-anchor-box {
+  position: relative;
+  width: 40px;
+  height: 52px;
+  display: flex;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+}
+
+.pin-anchor-box:hover {
+  transform: translateY(-3px) scale(1.06);
+}
+
+.pin-tag-pill {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  border: 2px solid #ffffff;
+  pointer-events: none;
+  letter-spacing: 0.3px;
+  z-index: 10;
+}
+
+.pin-tag-pill.start {
+  background: #047857;
+}
+
+.pin-tag-pill.dest {
+  background: #b91c1c;
+}
+
+.pin-tag-pill.user {
+  background: #6d28d9;
+}
+
+/* Sóng lan tỏa tỏa ra từ chân ghim */
+.pin-ripple-ring {
+  position: absolute;
+  left: 20px;
+  top: 48px;
+  width: 70px;
+  height: 70px;
+  margin-left: -35px;
+  margin-top: -35px;
+  border-radius: 50%;
+  border: 3px solid var(--ring-color);
+  background: var(--ring-bg);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+  animation: pro-pin-ripple 2s cubic-bezier(0.1, 0.45, 0.6, 1) infinite;
+}
+
+.pin-ripple-ring.r2 {
+  animation-delay: 1s;
+}
+
+.pin-ripple-ring.start {
+  --ring-color: #10b981;
+  --ring-bg: rgba(16, 185, 129, 0.28);
+}
+
+.pin-ripple-ring.dest {
+  --ring-color: #ef4444;
+  --ring-bg: rgba(239, 68, 68, 0.28);
+}
+
+.pin-ripple-ring.user {
+  --ring-color: #8b5cf6;
+  --ring-bg: rgba(139, 92, 246, 0.28);
+}
+
+@keyframes pro-pin-ripple {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.95;
+  }
+  60% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-ripple-ring {
+    animation: none;
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { useBusStore } from '../../store/busStore';
 import { gomCacLan } from '../../algorithms/ids';
@@ -28,12 +28,213 @@ function iconLan(so) {
   });
 }
 
-function iconSo(so, mau) {
+function iconSo(so, mau, mo = false) {
   return L.divIcon({
     className: 'tram-so',
-    html: `<div style="background:${mau};color:#fff;width:18px;height:18px;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:10px;border:2px solid #fff">${so}</div>`,
+    html: `<div style="background:${mau};color:#fff;width:18px;height:18px;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:10px;border:2px solid #fff;opacity:${mo ? 0.45 : 1}">${so}</div>`,
     iconSize: [18, 18],
     iconAnchor: [9, 9]
+  });
+}
+
+function iconDiem(loai) {
+  const isDest = loai === 'dich';
+  const tagText = isDest ? 'Điểm đến (B)' : 'Xuất phát (A)';
+  const tagClass = isDest ? 'dest' : 'start';
+  const letter = isDest ? 'B' : 'A';
+  const gradId = isDest ? 'pin-grad-dest' : 'pin-grad-start';
+  const startColor = isDest ? '#EF4444' : '#10B981';
+  const endColor = isDest ? '#B91C1C' : '#047857';
+  const textColor = isDest ? '#B91C1C' : '#047857';
+
+  return L.divIcon({
+    className: 'diem-dau-cuoi',
+    iconSize: [40, 52],
+    iconAnchor: [20, 48],
+    popupAnchor: [0, -48],
+    html: `
+      <div class="pro-pin-wrapper">
+        <div class="pin-ripple-ring ${tagClass}"></div>
+        <div class="pin-ripple-ring ${tagClass} r2"></div>
+        <div class="pin-anchor-box">
+          <div class="pin-tag-pill ${tagClass}">${tagText}</div>
+          <svg width="40" height="52" viewBox="0 0 40 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="${gradId}" x1="20" y1="2" x2="20" y2="48" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="${startColor}"/>
+                <stop offset="100%" stop-color="${endColor}"/>
+              </linearGradient>
+            </defs>
+            <path d="M20 2C10.61 2 3 9.61 3 19C3 31.5 20 48 20 48C20 48 37 31.5 37 19C37 9.61 29.39 2 20 2Z" fill="url(#${gradId})" stroke="#FFFFFF" stroke-width="2.2"/>
+            <circle cx="20" cy="19" r="8.5" fill="#FFFFFF"/>
+            <text x="20" y="23.5" text-anchor="middle" fill="${textColor}" font-size="12" font-weight="900" font-family="'Be Vietnam Pro', system-ui, sans-serif">${letter}</text>
+          </svg>
+        </div>
+      </div>
+    `
+  });
+}
+
+function iconViTriBan() {
+  return L.divIcon({
+    className: 'diem-dau-cuoi',
+    iconSize: [40, 52],
+    iconAnchor: [20, 48],
+    popupAnchor: [0, -48],
+    html: `
+      <div class="pro-pin-wrapper">
+        <div class="pin-ripple-ring user"></div>
+        <div class="pin-ripple-ring user r2"></div>
+        <div class="pin-anchor-box">
+          <div class="pin-tag-pill user">Vị trí của bạn</div>
+          <svg width="40" height="52" viewBox="0 0 40 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="pin-grad-user" x1="20" y1="2" x2="20" y2="48" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#8B5CF6"/>
+                <stop offset="100%" stop-color="#6D28D9"/>
+              </linearGradient>
+            </defs>
+            <path d="M20 2C10.61 2 3 9.61 3 19C3 31.5 20 48 20 48C20 48 37 31.5 37 19C37 9.61 29.39 2 20 2Z" fill="url(#pin-grad-user)" stroke="#FFFFFF" stroke-width="2.2"/>
+            <circle cx="20" cy="19" r="8.5" fill="#FFFFFF"/>
+            <path d="M16 23C16 20.8 17.8 19 20 19C22.2 19 24 20.8 24 23M20 17.5C18.6 17.5 17.5 16.4 17.5 15C17.5 13.6 18.6 12.5 20 12.5C21.4 12.5 22.5 13.6 22.5 15C22.5 16.4 21.4 17.5 20 17.5Z" stroke="#6D28D9" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+    `
+  });
+}
+
+function iconTarget(ten) {
+  return L.divIcon({
+    className: 'diem-dau-cuoi',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    html: `
+      <div style="position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:56px;height:56px;border-radius:50%;border:3px solid #f59e0b;background:rgba(245,158,11,0.22);animation:pro-pin-ripple 1.6s ease-out infinite"></div>
+        <div class="pin-tag-pill" style="top:-30px;background:#d97706;border-color:#fff">${ten}</div>
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="14" cy="14" r="12" fill="#f59e0b" stroke="#ffffff" stroke-width="2.5"/>
+          <circle cx="14" cy="14" r="7.5" fill="#ffffff"/>
+          <circle cx="14" cy="14" r="4" fill="#d97706"/>
+        </svg>
+      </div>
+    `
+  });
+}
+
+const iconXuatPhat = iconDiem('di');
+const iconDiemDen = iconDiem('dich');
+const iconNguoiDung = iconViTriBan();
+
+const svgBus = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="16" rx="2"/><path d="M3 11h18"/><path d="M19 19v2"/><path d="M5 19v2"/><circle cx="7.5" cy="15.5" r="1.5" fill="#FFFFFF"/><circle cx="16.5" cy="15.5" r="1.5" fill="#FFFFFF"/></svg>`;
+const svgBusSmall = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="16" rx="2"/><path d="M3 11h18"/><path d="M19 19v2"/><path d="M5 19v2"/><circle cx="7.5" cy="15.5" r="1.5" fill="#FFFFFF"/><circle cx="16.5" cy="15.5" r="1.5" fill="#FFFFFF"/></svg>`;
+
+function iconBenXe(ten, hienNhan) {
+  const nhan = hienNhan
+    ? `<div style="position:absolute;top:42px;left:50%;transform:translateX(-50%);white-space:nowrap;font:600 11px 'Be Vietnam Pro',Arial,sans-serif;color:#202124;background:rgba(255,255,255,.93);padding:1px 6px;border-radius:10px;box-shadow:0 1px 3px #0005;pointer-events:none">${ten}</div>`
+    : '';
+  return L.divIcon({
+    className: 'tram-so',
+    html: `<div style="position:relative;width:36px;height:36px"><div style="width:36px;height:36px;background:#d93025;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 5px #0008;display:grid;place-items:center"><span style="transform:rotate(45deg);display:flex;align-items:center;justify-content:center">${svgBus}</span></div>${nhan}</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [9, 40]
+  });
+}
+
+function iconDiemDon(ten, hienNhan) {
+  const nhan = hienNhan
+    ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;white-space:nowrap;font:600 11px 'Be Vietnam Pro',Arial,sans-serif;color:#202124;background:rgba(255,255,255,.93);padding:1px 6px;border-radius:10px;box-shadow:0 1px 3px #0005;pointer-events:none">${ten}</div>`
+    : '';
+  return L.divIcon({
+    className: 'tram-so',
+    html: `<div style="position:relative;width:22px;height:22px"><div style="width:22px;height:22px;background:#1a73e8;border:2px solid #fff;border-radius:6px;box-shadow:0 2px 5px #0008;display:grid;place-items:center;color:#fff">${svgBusSmall}</div>${nhan}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+}
+
+const laBenXe = (ten) => /^bến xe/i.test(ten.trim());
+
+// Hiện toàn bộ bến xe và điểm đón trên bản đồ (bến xe: ghim đỏ, điểm đón: ô vuông xanh, xa thì thu thành chấm)
+function TatCaTram({ routes }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
+  // Đang chọn điểm thì bấm vào icon trạm sẽ chọn đúng trạm đó. Không thì bấm icon để mở popup có nút chọn.
+  const cheDoChon = useBusStore((s) => s.cheDoChon);
+  const chonViTri = useBusStore((s) => s.chonViTri);
+  const datDiemTheoLoai = useBusStore((s) => s.datDiemTheoLoai);
+  const datViTriBatKy = useBusStore((s) => s.datViTriBatKy);
+  const dangChon = Boolean(cheDoChon || chonViTri);
+  const chonTram = (tram) => {
+    if (chonViTri) datViTriBatKy(tram.lat, tram.lng);
+    else datDiemTheoLoai(cheDoChon, tram.lat, tram.lng);
+  };
+
+  const danhSach = useMemo(() => {
+    const bang = new Map();
+    routes.forEach((route) => {
+      route.stops.forEach((stop) => {
+        const khoa = `${stop.name}|${stop.lat.toFixed(4)}|${stop.lng.toFixed(4)}`;
+        const co = bang.get(khoa);
+        if (co) co.tuyen.add(route.id);
+        else bang.set(khoa, { ...stop, tuyen: new Set([route.id]) });
+      });
+    });
+    return [...bang.values()];
+  }, [routes]);
+
+  return danhSach.map((tram) => {
+    const benXe = laBenXe(tram.name);
+    const popup = dangChon ? null : (
+      <Popup>
+        <b>{tram.name}</b>
+        <br />
+        {benXe ? 'Bến xe' : 'Điểm đón xe buýt'}
+        <br />
+        Tuyến đi qua: {[...tram.tuyen].join(', ')}
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <button
+            onClick={() => { map.closePopup(); datDiemTheoLoai('di', tram.lat, tram.lng); }}
+            style={{ background: '#16803c', color: '#fff', border: 0, borderRadius: 5, padding: '4px 8px', cursor: 'pointer' }}
+          >
+            Xuất phát từ đây
+          </button>
+          <button
+            onClick={() => { map.closePopup(); datDiemTheoLoai('den', tram.lat, tram.lng); }}
+            style={{ background: '#b91c1c', color: '#fff', border: 0, borderRadius: 5, padding: '4px 8px', cursor: 'pointer' }}
+          >
+            Đến đây
+          </button>
+        </div>
+      </Popup>
+    );
+    const suKien = { click: () => dangChon && chonTram(tram) };
+    if (!benXe && zoom < 14) {
+      return (
+        <CircleMarker
+          key={tram.id}
+          center={[tram.lat, tram.lng]}
+          radius={5}
+          eventHandlers={suKien}
+          pathOptions={{ color: '#fff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1 }}
+        >
+          {popup}
+        </CircleMarker>
+      );
+    }
+    return (
+      <Marker
+        key={tram.id}
+        position={[tram.lat, tram.lng]}
+        icon={benXe ? iconBenXe(tram.name, zoom >= 13) : iconDiemDon(tram.name, zoom >= 16)}
+        zIndexOffset={benXe ? 200 : 100}
+        eventHandlers={suKien}
+      >
+        {popup}
+      </Marker>
+    );
   });
 }
 
@@ -57,12 +258,18 @@ function VuaManHinh({ diem }) {
 }
 
 function BatClick() {
-  const cachNhap = useBusStore((s) => s.cachNhap);
+  const cheDoChon = useBusStore((s) => s.cheDoChon);
   const datDiemTrenBanDo = useBusStore((s) => s.datDiemTrenBanDo);
+  const chonViTri = useBusStore((s) => s.chonViTri);
+  const datViTriBatKy = useBusStore((s) => s.datViTriBatKy);
 
   useMapEvents({
     click(event) {
-      if (cachNhap !== 'toaDo') return;
+      if (chonViTri) {
+        datViTriBatKy(event.latlng.lat, event.latlng.lng);
+        return;
+      }
+      if (!cheDoChon) return;
       datDiemTrenBanDo(event.latlng.lat, event.latlng.lng);
     }
   });
@@ -70,7 +277,7 @@ function BatClick() {
   return null;
 }
 
-function DuongTheoPho({ diem, mau, netDut, weight, phuongTien = 'motorcycle' }) {
+function DuongTheoPho({ diem, mau, netDut, weight, phuongTien = 'motorcycle', doDuc = 0.95 }) {
   const [viTri, setViTri] = useState(null);
   const khoa = `${phuongTien}|${diem.map((mot) => `${mot.lat.toFixed(5)},${mot.lng.toFixed(5)}`).join('|')}`;
   const quaGan = diem.length < 2 || haversine(diem[0], diem[diem.length - 1]) < 25;
@@ -107,7 +314,7 @@ function DuongTheoPho({ diem, mau, netDut, weight, phuongTien = 'motorcycle' }) 
   return (
     <Polyline
       positions={viTri}
-      pathOptions={{ color: mau, weight, dashArray: netDut ? '7 7' : null, opacity: 0.95 }}
+      pathOptions={{ color: mau, weight, dashArray: netDut ? '7 7' : null, opacity: doDuc }}
     />
   );
 }
@@ -120,19 +327,32 @@ export default function MapView() {
     ketQua,
     chuoiDi,
     chuoiDen,
-    diemKeTiep,
-    cachNhap,
+    cheDoChon,
+    nhacNho,
     tramXemId,
     idsResult,
-    currentStep
+    currentStep,
+    tuyenChon,
+    chonViTri,
+    viTriBatKy,
+    ganNhat,
+    idsProgress,
+    idsFinalPath,
+    idsFinalSegments,
+    idsFinalRoadCoords,
+    idsGoalNode,
+    idsSimulating,
+    streetLines
   } = useBusStore();
 
+  const chon = tuyenChon && tuyenChon.tuyenId === tuyenId && tuyenChon.chieu === chieu ? tuyenChon : null;
+  const ganNhatHopLe = ganNhat?.tram ? ganNhat : null;
   const coDuong = Boolean(ketQua?.thanhCong);
   const tuyenVe = coDuong
     ? routes.find((route) => route.id === ketQua.tuyenId)
     : routes.find((route) => route.id === tuyenId);
   const chieuVe = coDuong ? ketQua.chieu : chieu;
-  const tramTheoChieu = layThuTuTram(tuyenVe, chieuVe);
+  const tramTheoChieu = coDuong || chon ? layThuTuTram(tuyenVe, chieuVe) : [];
   const mauChieu = chieuVe === 've' ? '#e67e22' : '#1a73e8';
   const cacLan = gomCacLan(idsResult?.steps || []);
   const lanDangXem = cacLan[currentStep];
@@ -147,19 +367,28 @@ export default function MapView() {
   if (coDuong) {
     diemCanh.push([ketQua.diemDi.lat, ketQua.diemDi.lng], [ketQua.diemDen.lat, ketQua.diemDen.lng]);
     ketQua.cacTram.forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
-  } else {
-    tramTheoChieu.forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
-    if (diemDiNhap) diemCanh.push([diemDiNhap.lat, diemDiNhap.lng]);
-    if (diemDenNhap) diemCanh.push([diemDenNhap.lat, diemDenNhap.lng]);
+  } else if (chon) {
+    // Chỉ tự căn bản đồ khi vừa chọn một tuyến. Đặt điểm A, B hay chọn vị trí bất kỳ không làm bản đồ nhảy.
+    tramTheoChieu.slice(chon.i, chon.j + 1).forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
+    diemCanh.push([chon.diemDi.lat, chon.diemDi.lng], [chon.diemDen.lat, chon.diemDen.lng]);
+  } else if (idsFinalRoadCoords && idsFinalRoadCoords.length > 0) {
+    idsFinalRoadCoords.forEach((p) => diemCanh.push(p));
+  } else if (idsFinalPath && idsFinalPath.length > 0) {
+    idsFinalPath.forEach((p) => diemCanh.push([p.lat, p.lng]));
   }
 
   const tramGiua = coDuong ? ketQua.cacTram.slice(1, -1) : [];
-  const loiChon = cachNhap === 'toaDo'
-    ? (diemKeTiep === 'den' ? 'Bấm bản đồ để đặt điểm đến' : 'Bấm bản đồ để đặt điểm đi')
-    : 'Đang chọn bằng danh sách trạm';
+  const dangChonDiem = Boolean(cheDoChon || chonViTri);
+  const loiChon = chonViTri
+    ? 'Bấm bản đồ để chọn vị trí bất kỳ'
+    : cheDoChon === 'den'
+    ? 'Bấm bản đồ để chọn điểm đến'
+    : cheDoChon === 'di'
+    ? 'Bấm bản đồ để chọn điểm đi'
+    : 'Bấm nút "Chọn điểm đi" hoặc "Chọn điểm đến" ở cột trái rồi bấm bản đồ';
 
   return (
-    <div className="w-full h-full relative">
+    <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
         <TileLayer
           attribution={urlVietMap ? '&copy; VietMap' : 'Tiles &copy; Esri'}
@@ -168,28 +397,172 @@ export default function MapView() {
         />
         <VuaManHinh diem={diemCanh} />
         <BatClick />
+        <TatCaTram routes={routes} />
 
         {!coDuong && tramTheoChieu.length > 1 && (
-          <DuongTheoPho diem={tramTheoChieu} mau={mauChieu} weight={4} />
+          <DuongTheoPho diem={tramTheoChieu} mau={mauChieu} weight={chon ? 4 : 4} doDuc={chon ? 0.35 : 0.95} />
+        )}
+        {!coDuong && chon && chon.j > chon.i && (
+          <DuongTheoPho diem={tramTheoChieu.slice(chon.i, chon.j + 1)} mau={mauChieu} weight={7} />
+        )}
+        {!coDuong && chon && (
+          <>
+            {chon.toaDoDi ? (
+              <Polyline positions={chon.toaDoDi} pathOptions={{ color: '#16803c', dashArray: '7 7', weight: 4, opacity: 0.95 }} />
+            ) : (
+              <DuongTheoPho diem={[chon.diemDi, tramTheoChieu[chon.i]]} mau="#16803c" netDut weight={4} phuongTien="foot" />
+            )}
+            {chon.toaDoDen ? (
+              <Polyline positions={chon.toaDoDen} pathOptions={{ color: '#16803c', dashArray: '7 7', weight: 4, opacity: 0.95 }} />
+            ) : (
+              <DuongTheoPho diem={[tramTheoChieu[chon.j], chon.diemDen]} mau="#16803c" netDut weight={4} phuongTien="foot" />
+            )}
+          </>
         )}
 
-        {!coDuong && tramTheoChieu.map((tram, index) => (
-          <Marker key={tram.id} position={[tram.lat, tram.lng]} icon={iconSo(index + 1, mauChieu)}>
-            <Popup>
-              {index + 1}. {tram.name}
-              <br />
-              Tuyến {tuyenVe.id}, {tenChieu(chieuVe)}
-            </Popup>
+        {!coDuong && tramTheoChieu.map((tram, index) => {
+          const trongDoan = !chon || (index >= chon.i && index <= chon.j);
+          const icon = chon && index === chon.i
+            ? iconChu(`Lên ${index + 1}`, '#16803c')
+            : chon && index === chon.j
+              ? iconChu(`Xuống ${index + 1}`, '#b45309')
+              : iconSo(index + 1, mauChieu, !trongDoan);
+          return (
+            <Marker key={tram.id} position={[tram.lat, tram.lng]} icon={icon}>
+              <Popup>
+                {index + 1}. {tram.name}
+                <br />
+                Tuyến {tuyenVe.id}, {tenChieu(chieuVe)}
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {viTriBatKy && (
+          <Marker position={[viTriBatKy.lat, viTriBatKy.lng]} icon={iconNguoiDung} zIndexOffset={4800}>
+            <Popup>Vị trí bạn chọn</Popup>
           </Marker>
-        ))}
+        )}
+
+        {/* Mạng lưới đường phố xung quanh (giống trang web mẫu) */}
+        {streetLines && streetLines.length > 0 && (
+          <Polyline
+            positions={streetLines}
+            pathOptions={{ color: '#4b6a8a', weight: 1.5, opacity: 0.35, interactive: false }}
+          />
+        )}
+
+        {/* Nút được duyệt trong quá trình chạy IDS (chỉ hiện khi đang chạy mô phỏng, chạy xong tự động ẩn) */}
+        {idsSimulating && ((idsProgress?.seenNodes && idsProgress.seenNodes.length > 0) || (idsProgress?.visitedNodes && idsProgress.visitedNodes.length > 0)) && (
+          (idsProgress.seenNodes || idsProgress.visitedNodes).map((nut) => (
+            <CircleMarker
+              key={`ids-dot-${nut.id}`}
+              center={[nut.lat, nut.lng]}
+              radius={4.5}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 1,
+                fillColor: idsProgress.color || '#e08a00',
+                fillOpacity: 0.95
+              }}
+            >
+              <Popup>
+                <b>{nut.name}</b>
+                <br />
+                Độ sâu xét: {nut.d} (Vòng lặp L = {idsProgress.L})
+              </Popup>
+            </CircleMarker>
+          ))
+        )}
+
+        {/* Lộ trình tìm được bằng IDS: Bám sát lòng đường & vỉa hè thực tế (Tuyệt đối không chim bay) */}
+        {idsFinalSegments && idsFinalSegments.length > 0 ? (
+          idsFinalSegments.map((seg, sIdx) => {
+            const isWalk = seg.loai === 'diBo';
+            return (
+              <span key={`ids-seg-${sIdx}`}>
+                {/* Viền ngoài phát sáng */}
+                <Polyline
+                  positions={seg.toaDo}
+                  pathOptions={{
+                    color: '#ffffff',
+                    weight: isWalk ? 9 : 12,
+                    opacity: 0.95,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                  }}
+                />
+                {/* Đường di chuyển thực tế: Đi bộ nét đứt xanh lá, Xe buýt cam đậm nổi bật */}
+                <Polyline
+                  positions={seg.toaDo}
+                  pathOptions={{
+                    color: isWalk ? '#16803c' : '#e8590c',
+                    weight: isWalk ? 5 : 6,
+                    dashArray: isWalk ? '8 6' : null,
+                    opacity: 1,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                  }}
+                >
+                  <Popup>
+                    <b>{isWalk ? 'Đi bộ theo vỉa hè / đường phố' : 'Xe buýt theo tuyến đường'}</b>
+                    <br />
+                    Từ: {seg.from.name}
+                    <br />
+                    Đến: {seg.to.name}
+                    <br />
+                    Cự ly: {Math.round(seg.met)} m
+                  </Popup>
+                </Polyline>
+              </span>
+            );
+          })
+        ) : idsFinalRoadCoords && idsFinalRoadCoords.length > 0 ? (
+          <>
+            <Polyline
+              positions={idsFinalRoadCoords}
+              pathOptions={{ color: '#ffffff', weight: 12, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
+            />
+            <Polyline
+              positions={idsFinalRoadCoords}
+              pathOptions={{ color: '#e8590c', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
+            />
+          </>
+        ) : null}
+
+        {/* Mục tiêu tìm thấy của IDS */}
+        {idsGoalNode && (
+          <Marker position={[idsGoalNode.lat, idsGoalNode.lng]} icon={iconTarget(idsGoalNode.name)} zIndexOffset={4500}>
+            <Popup><b>Mục tiêu:</b> {idsGoalNode.name}</Popup>
+          </Marker>
+        )}
+        {ganNhatHopLe && (
+          <>
+            <Polyline
+              positions={ganNhatHopLe.toaDo}
+              pathOptions={{ color: '#7c3aed', weight: 5, dashArray: ganNhatHopLe.uocTinh ? '2 8' : '8 6', opacity: 0.95 }}
+            />
+            <Marker
+              position={[ganNhatHopLe.tram.lat, ganNhatHopLe.tram.lng]}
+              icon={iconChu('Gần nhất', '#7c3aed')}
+              zIndexOffset={1000}
+            >
+              <Popup>
+                {ganNhatHopLe.tram.name}
+                <br />
+                Đi bộ {Math.round(ganNhatHopLe.met)} m
+              </Popup>
+            </Marker>
+          </>
+        )}
 
         {!coDuong && diemDiNhap && (
-          <Marker position={[diemDiNhap.lat, diemDiNhap.lng]} icon={iconChu('Đi', '#16803c')}>
+          <Marker position={[diemDiNhap.lat, diemDiNhap.lng]} icon={iconXuatPhat} zIndexOffset={5000}>
             <Popup>Điểm đi</Popup>
           </Marker>
         )}
         {!coDuong && diemDenNhap && (
-          <Marker position={[diemDenNhap.lat, diemDenNhap.lng]} icon={iconChu('Đến', '#b91c1c')}>
+          <Marker position={[diemDenNhap.lat, diemDenNhap.lng]} icon={iconDiemDen} zIndexOffset={4500}>
             <Popup>Điểm đến</Popup>
           </Marker>
         )}
@@ -203,7 +576,7 @@ export default function MapView() {
               <DuongTheoPho diem={[ketQua.diemDi, tramXem]} mau="#6b7280" netDut weight={4} phuongTien="foot" />
             )}
 
-            <Marker position={[ketQua.diemDi.lat, ketQua.diemDi.lng]} icon={iconChu('Đi', '#16803c')}>
+            <Marker position={[ketQua.diemDi.lat, ketQua.diemDi.lng]} icon={iconXuatPhat} zIndexOffset={5000}>
               <Popup>Điểm đầu đi bộ</Popup>
             </Marker>
             <Marker position={[ketQua.tramDon.lat, ketQua.tramDon.lng]} icon={iconChu('Đón', '#1a73e8')}>
@@ -232,7 +605,7 @@ export default function MapView() {
                 <Popup>Trạm xuống: {ketQua.tramXuong.name}</Popup>
               </Marker>
             )}
-            <Marker position={[ketQua.diemDen.lat, ketQua.diemDen.lng]} icon={iconChu('Đến', '#b91c1c')}>
+            <Marker position={[ketQua.diemDen.lat, ketQua.diemDen.lng]} icon={iconDiemDen} zIndexOffset={4500}>
               <Popup>
                 Điểm đến
                 {xuongSatDen && (
@@ -257,6 +630,11 @@ export default function MapView() {
         ))}
       </MapContainer>
 
+      {nhacNho && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] bg-gray-900/90 text-white text-sm rounded px-4 py-2 shadow pointer-events-none">
+          {nhacNho}
+        </div>
+      )}
       <div className="absolute top-3 left-14 z-[500] bg-white/95 shadow rounded px-3 py-1 text-xs text-gray-700 pointer-events-none">
         {loiChon}
       </div>
@@ -273,6 +651,22 @@ export default function MapView() {
           </svg>
           Xe buýt
         </p>
+        <p className="flex items-center gap-2">
+          <svg width="36" height="10" aria-hidden="true">
+            <line x1="0" y1="5" x2="36" y2="5" stroke="#7c3aed" strokeWidth="3" strokeDasharray="8 5" />
+          </svg>
+          Đường tới trạm gần nhất
+        </p>
+        <p className="flex items-center gap-2">
+          <span className="w-4 h-4 bg-primary text-white rounded flex items-center justify-center text-[10px] font-bold">B</span>
+          Bến xe và điểm đón
+        </p>
+        {idsSimulating && (
+          <p className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-amber-500 border border-white shadow-sm inline-block"></span>
+            Chấm IDS đang duyệt (theo độ sâu L)
+          </p>
+        )}
       </div>
     </div>
   );

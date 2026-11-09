@@ -1,3 +1,5 @@
+import { layDuongPho } from '../services/vietmap';
+
 const SO_BUOC_THUONG = 200;
 const SO_NUT_TOI_DA = 12000;
 
@@ -155,4 +157,155 @@ export function gomCacLan(steps) {
   }
 
   return cacLan;
+}
+
+
+// Generator chạy mô phỏng thuật toán IDS từng bước theo độ sâu L (giống ids-tim-kiem-ben-xe.netlify.app)
+export function* taoBoChayIDS(doThi, startId, isGoal, maxD = 25, cap = 200000) {
+  let prevSize = -1;
+  const colors = ['#0f9d78', '#1d7fd1', '#6b5bd6', '#d6428f', '#e08a00', '#d9482b'];
+
+  for (let Lm = 0; Lm <= maxD; Lm++) {
+    const best = new Map();
+    const path = [startId];
+    const visitedNodes = [];
+    let cnt = 0;
+    let found = null;
+    let aborted = false;
+
+    function dls(u, d) {
+      const b = best.get(u);
+      if (b !== undefined && b <= d) return false;
+      best.set(u, d);
+      cnt++;
+
+      const n = doThi.nodes[u];
+      if (n && n.lat != null && n.lng != null) {
+        visitedNodes.push({ id: u, name: n.name || u, lat: n.lat, lng: n.lng, d });
+      }
+
+      if (isGoal(u) && u !== startId) {
+        found = path.slice();
+        return true;
+      }
+      if (d === Lm) return false;
+      if (cnt > cap) {
+        aborted = true;
+        return false;
+      }
+
+      const edges = (doThi.edges[u] || []).slice().sort((a, b) => a.met - b.met);
+      for (const e of edges) {
+        if (!path.includes(e.to)) {
+          path.push(e.to);
+          if (dls(e.to, d + 1)) return true;
+          path.pop();
+          if (aborted) return false;
+        }
+      }
+      return false;
+    }
+
+    dls(startId, 0);
+
+    const seenNodes = [];
+    best.forEach((depth, id) => {
+      const n = doThi.nodes[id];
+      if (n && n.lat != null && n.lng != null && id !== startId) {
+        seenNodes.push({ id, name: n.name || id, lat: n.lat, lng: n.lng, d: depth });
+      }
+    });
+
+    const exhausted = !found && !aborted && best.size === prevSize;
+    prevSize = best.size;
+
+    yield {
+      L: Lm,
+      cnt,
+      seenCount: best.size,
+      seenNodes,
+      visitedNodes: seenNodes,
+      color: colors[Lm % colors.length],
+      found,
+      aborted,
+      exhausted
+    };
+
+    if (found || aborted || exhausted) return;
+  }
+}
+
+// Tính số lượng nút đỉnh điểm mà BFS phải giữ trong hàng đợi (để so sánh bộ nhớ với IDS)
+export function bfsPeak(doThi, startId, isGoal) {
+  let q = [startId];
+  const vis = new Set(q);
+  let peak = 1;
+
+  while (q.length > 0) {
+    const nq = [];
+    for (const u of q) {
+      if (isGoal(u)) return { peak };
+      const edges = doThi.edges[u] || [];
+      for (const e of edges) {
+        if (!vis.has(e.to)) {
+          vis.add(e.to);
+          nq.push(e.to);
+        }
+      }
+    }
+    q = nq;
+    peak = Math.max(peak, q.length);
+  }
+
+  return { peak };
+}
+
+// Chuyển kết quả chuỗi nút IDS tìm được thành các cung đường phố thực tế (không dùng đường chim bay)
+export async function giaiMaDuongIDS(doThi, pathIds) {
+  if (!pathIds || pathIds.length < 2) return null;
+
+  const segments = [];
+  const allCoords = [];
+
+  for (let i = 0; i < pathIds.length - 1; i++) {
+    const uId = pathIds[i];
+    const vId = pathIds[i + 1];
+    const uNode = doThi.nodes[uId];
+    const vNode = doThi.nodes[vId];
+    if (!uNode || !vNode) continue;
+
+    const edge = (doThi.edges[uId] || []).find((e) => e.to === vId);
+    const laDiBo = uId === '__xuat_phat' || vId === '__diem_dich' || edge?.loai === 'diBo';
+    const phuongTien = laDiBo ? 'foot' : 'motorcycle';
+
+    let toaDo = null;
+    let met = edge?.met || 0;
+
+    const duong = await layDuongPho([uNode, vNode], phuongTien).catch(() => null);
+    if (duong && duong.toaDo && duong.toaDo.length >= 2) {
+      toaDo = duong.toaDo;
+      met = duong.met;
+    } else {
+      toaDo = [[uNode.lat, uNode.lng], [vNode.lat, vNode.lng]];
+    }
+
+    segments.push({
+      from: uNode,
+      to: vNode,
+      loai: laDiBo ? 'diBo' : 'xe',
+      phuongTien,
+      toaDo,
+      met
+    });
+  }
+
+  segments.forEach((seg, idx) => {
+    if (idx === 0) {
+      allCoords.push(...seg.toaDo);
+    } else {
+      allCoords.push(...seg.toaDo.slice(1));
+    }
+  });
+
+  return { segments, allCoords };
 }
