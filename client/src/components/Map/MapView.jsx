@@ -12,7 +12,10 @@ import { setWorkerUrl } from 'maplibre-gl';
 import L from 'leaflet';
 
 try {
-  setWorkerUrl('https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl-worker.mjs');
+  if (typeof window !== 'undefined') {
+    const workerUrl = new URL('/maplibre-gl-worker.mjs', window.location.href).href;
+    setWorkerUrl(workerUrl);
+  }
 } catch (e) {
   console.warn('Lỗi cấu hình maplibre worker:', e);
 }
@@ -23,12 +26,38 @@ function GoongMapLayer({ styleUrl }) {
   useEffect(() => {
     if (!styleUrl) return;
     let gl = null;
+    let removed = false;
+
+    function cleanup() {
+      if (removed) return;
+      removed = true;
+      if (gl) {
+        try {
+          map.removeLayer(gl);
+        } catch {}
+      }
+    }
+
     try {
       gl = maplibreGL({
         style: styleUrl,
         pane: 'tilePane'
       });
       gl.addTo(map);
+
+      const glMap = gl.getMaplibreMap?.();
+      if (glMap) {
+        // Tự động gỡ layer nếu Goong bị chặn (403, 401, CORS, domain restriction) để lộ bản đồ nền
+        glMap.on('error', (e) => {
+          const err = e?.error || e;
+          const status = err?.status || err?.statusCode;
+          const msg = (err?.message || '').toLowerCase();
+          if (status === 403 || status === 401 || msg.includes('403') || msg.includes('unauthorized') || msg.includes('failed to fetch')) {
+            console.warn('Goong Map bị chặn hoặc không tải được style, dùng bản đồ nền dự phòng:', err);
+            cleanup();
+          }
+        });
+      }
 
       const timer = setTimeout(() => {
         try {
@@ -38,12 +67,11 @@ function GoongMapLayer({ styleUrl }) {
 
       return () => {
         clearTimeout(timer);
-        try {
-          map.removeLayer(gl);
-        } catch {}
+        cleanup();
       };
     } catch (err) {
       console.warn('Lỗi tải Goong Map layer:', err);
+      cleanup();
     }
   }, [map, styleUrl]);
 
