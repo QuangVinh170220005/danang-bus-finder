@@ -6,9 +6,38 @@ import { layThuTuTram, tenChieu } from '../../algorithms/graph';
 import { haversine } from '../../algorithms/haversine';
 import { duongPhoHopLy, layDuongPho, urlNenVietMap } from '../../services/vietmap';
 import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
 import L from 'leaflet';
 
 const NEN_DU_PHONG = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+
+function GoongMapLayer({ apiKey }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!apiKey) return;
+    let gl = null;
+    try {
+      gl = maplibreGL({
+        style: `https://tiles.goong.io/assets/goong_map_web.json?api_key=${apiKey}`
+      });
+      gl.addTo(map);
+    } catch (err) {
+      console.warn('Lỗi tải Goong Map layer:', err);
+    }
+
+    return () => {
+      if (gl) {
+        try {
+          map.removeLayer(gl);
+        } catch {}
+      }
+    };
+  }, [map, apiKey]);
+
+  return null;
+}
 
 function iconChu(chu, mau) {
   return L.divIcon({
@@ -360,6 +389,7 @@ export default function MapView() {
   const diemDiNhap = docToaDo(chuoiDi);
   const diemDenNhap = docToaDo(chuoiDen);
   const urlVietMap = urlNenVietMap();
+  const goongKey = import.meta.env.VITE_GOONG_MAP_TILES_KEY || import.meta.env.VITE_GOONG_MAP_KEY;
   const tramXem = coDuong ? ketQua.tramKhac.find((tram) => tram.id === tramXemId) : null;
   const xuongSatDen = coDuong && haversine(ketQua.tramXuong, ketQua.diemDen) < 90;
 
@@ -390,11 +420,15 @@ export default function MapView() {
   return (
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
-        <TileLayer
-          attribution={urlVietMap ? '&copy; VietMap' : 'Tiles &copy; Esri'}
-          url={urlVietMap || NEN_DU_PHONG}
-          maxZoom={20}
-        />
+        {goongKey ? (
+          <GoongMapLayer apiKey={goongKey} />
+        ) : (
+          <TileLayer
+            attribution={urlVietMap ? '&copy; VietMap' : 'Tiles &copy; Esri'}
+            url={urlVietMap || NEN_DU_PHONG}
+            maxZoom={20}
+          />
+        )}
         <VuaManHinh diem={diemCanh} />
         <BatClick />
         <TatCaTram routes={routes} />
