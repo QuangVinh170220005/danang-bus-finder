@@ -58,27 +58,31 @@ const MAP_STYLES = {
     isGoong: true,
     styleUrl: (key) => `https://tiles.goong.io/assets/goong_map_web.json?api_key=${key}`
   },
-  goong_satellite: {
-    id: 'goong_satellite',
-    name: 'Goong Map (Vệ tinh)',
-    mota: 'Ảnh chụp vệ tinh Goong Maps',
-    isGoong: true,
-    styleUrl: (key) => `https://tiles.goong.io/assets/goong_satellite.json?api_key=${key}`
-  },
-  goong_dark: {
-    id: 'goong_dark',
-    name: 'Goong Map (Chế độ tối)',
-    mota: 'Bản đồ ban đêm Goong Maps',
-    isGoong: true,
-    styleUrl: (key) => `https://tiles.goong.io/assets/goong_map_dark.json?api_key=${key}`
-  },
   street: {
     id: 'street',
-    name: 'Đường phố (Esri)',
-    mota: 'Bản đồ giao thông sáng (Esri)',
+    name: 'Đường phố chuẩn (Esri)',
+    mota: 'Bản đồ giao thông sáng rõ nét',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri',
     maxZoom: 19
+  },
+  satellite: {
+    id: 'satellite',
+    name: 'Vệ tinh (Satellite)',
+    mota: 'Ảnh chụp vệ tinh thực tế & tên đường',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19
+  },
+  dark: {
+    id: 'dark',
+    name: 'Chế độ tối (Dark Mode)',
+    mota: 'Tông đen xám làm nổi bật các chấm IDS',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 16
   },
   osm: {
     id: 'osm',
@@ -86,6 +90,14 @@ const MAP_STYLES = {
     mota: 'Bản đồ chi tiết ngõ hẻm',
     url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  },
+  topo: {
+    id: 'topo',
+    name: 'Địa hình (Topographic)',
+    mota: 'Độ cao đồi núi Sơn Trà & Ngũ Hành Sơn',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
     maxZoom: 19
   }
 };
@@ -485,15 +497,35 @@ export default function MapView() {
   return (
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
-        {/* Bản đồ nền luôn sẵn sàng để không bao giờ bị trắng màn hình */}
-        <TileLayer
-          attribution='Tiles &copy; Esri &mdash; Source: Esri'
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
-        {/* Nếu chọn kiểu Goong Map, nạp lớp vector của Goong đè lên */}
-        {activeStyle.isGoong && (
-          <GoongMapLayer key={activeStyle.id} styleUrl={activeStyle.styleUrl(goongKey)} />
+        {/* Render theo kiểu bản đồ đang chọn */}
+        {activeStyle.isGoong ? (
+          <>
+            <TileLayer
+              key="goong-base-fallback"
+              attribution='&copy; <a href="https://goong.io">Goong Maps</a> &copy; Esri'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+            <GoongMapLayer key={activeStyle.id} styleUrl={activeStyle.styleUrl(goongKey)} />
+          </>
+        ) : (
+          <>
+            <TileLayer
+              key={activeStyle.id}
+              attribution={activeStyle.attribution}
+              url={activeStyle.url}
+              maxZoom={activeStyle.maxZoom || 19}
+            />
+            {activeStyle.overlayUrl && (
+              <TileLayer
+                key={`${activeStyle.id}-overlay`}
+                attribution=""
+                url={activeStyle.overlayUrl}
+                maxZoom={activeStyle.maxZoom || 19}
+                opacity={0.95}
+              />
+            )}
+          </>
         )}
         <VuaManHinh diem={diemCanh} />
         <BatClick />
