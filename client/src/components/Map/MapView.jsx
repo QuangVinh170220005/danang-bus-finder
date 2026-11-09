@@ -20,7 +20,7 @@ try {
   console.warn('Lỗi cấu hình maplibre worker:', e);
 }
 
-function GoongMapLayer({ styleUrl }) {
+function GoongMapLayer({ styleUrl, onError, onSuccess }) {
   const map = useMap();
 
   useEffect(() => {
@@ -46,7 +46,14 @@ function GoongMapLayer({ styleUrl }) {
       gl.addTo(map);
 
       const glMap = gl.getMaplibreMap?.();
+      if (typeof window !== 'undefined') {
+        window.__gl = gl;
+        window.__glMap = glMap;
+      }
       if (glMap) {
+        glMap.on('load', () => {
+          onSuccess?.();
+        });
         // Tự động gỡ layer nếu Goong bị chặn (403, 401, CORS, domain restriction) để lộ bản đồ nền
         glMap.on('error', (e) => {
           const err = e?.error || e;
@@ -55,6 +62,7 @@ function GoongMapLayer({ styleUrl }) {
           if (status === 403 || status === 401 || msg.includes('403') || msg.includes('unauthorized') || msg.includes('failed to fetch')) {
             console.warn('Goong Map bị chặn hoặc không tải được style, dùng bản đồ nền dự phòng:', err);
             cleanup();
+            onError?.(status === 403 ? 'blocked' : 'error');
           }
         });
       }
@@ -72,8 +80,9 @@ function GoongMapLayer({ styleUrl }) {
     } catch (err) {
       console.warn('Lỗi tải Goong Map layer:', err);
       cleanup();
+      onError?.('error');
     }
-  }, [map, styleUrl]);
+  }, [map, styleUrl, onError, onSuccess]);
 
   return null;
 }
@@ -489,6 +498,7 @@ export default function MapView() {
     return localStorage.getItem('danang_map_style') || 'goong';
   });
   const [showStyleMenu, setShowStyleMenu] = useState(false);
+  const [goongBlocked, setGoongBlocked] = useState(false);
 
   const activeStyle = MAP_STYLES[mapStyleKey] || MAP_STYLES.goong;
 
@@ -528,13 +538,23 @@ export default function MapView() {
         {/* Render theo kiểu bản đồ đang chọn */}
         {activeStyle.isGoong ? (
           <>
-            <TileLayer
-              key="goong-base-fallback"
-              attribution='&copy; <a href="https://goong.io">Goong Maps</a> &copy; Esri'
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-            />
-            <GoongMapLayer key={activeStyle.id} styleUrl={activeStyle.styleUrl(goongKey)} />
+            {goongBlocked ? (
+              <TileLayer
+                key="goong-blocked-osm-fallback"
+                attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
+                url="https://tile.openstreetmap.de/{z}/{x}/{y}.png"
+                maxZoom={19}
+              />
+            ) : (
+              <GoongMapLayer
+                key={activeStyle.id}
+                styleUrl={activeStyle.styleUrl(goongKey)}
+                onError={(reason) => {
+                  if (reason === 'blocked') setGoongBlocked(true);
+                }}
+                onSuccess={() => setGoongBlocked(false)}
+              />
+            )}
           </>
         ) : (
           <>
@@ -877,6 +897,11 @@ export default function MapView() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
           <span>Kiểu bản đồ: <b className="text-primary">{activeStyle.name}</b></span>
+          {activeStyle.isGoong && goongBlocked && (
+            <span className="text-[10px] text-amber-700 bg-amber-100 font-medium px-1.5 py-0.5 rounded ml-1">
+              (Domain giới hạn - Đang dùng OSM dự phòng)
+            </span>
+          )}
           <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showStyleMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
           </svg>
