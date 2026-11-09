@@ -8,7 +8,50 @@ import { duongPhoHopLy, layDuongPho, urlNenVietMap } from '../../services/vietma
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-const NEN_CHINH = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const MAP_STYLES = {
+  street: {
+    id: 'street',
+    name: 'Đường phố',
+    mota: 'Bản đồ giao thông sáng (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19
+  },
+  satellite: {
+    id: 'satellite',
+    name: 'Vệ tinh',
+    mota: 'Ảnh vệ tinh thực tế & tên đường',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; DigitalGlobe, GeoEye, Earthstar',
+    maxZoom: 19
+  },
+  dark: {
+    id: 'dark',
+    name: 'Chế độ tối',
+    mota: 'Tông màu đen xám hiện đại',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 16
+  },
+  osm: {
+    id: 'osm',
+    name: 'OpenStreetMap',
+    mota: 'Bản đồ chi tiết ngõ hẻm',
+    url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  },
+  topo: {
+    id: 'topo',
+    name: 'Địa hình',
+    mota: 'Độ cao đồi núi Sơn Trà',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19
+  }
+};
 
 function iconChu(chu, mau) {
   return L.divIcon({
@@ -363,6 +406,19 @@ export default function MapView() {
   const tramXem = coDuong ? ketQua.tramKhac.find((tram) => tram.id === tramXemId) : null;
   const xuongSatDen = coDuong && haversine(ketQua.tramXuong, ketQua.diemDen) < 90;
 
+  const [mapStyleKey, setMapStyleKey] = useState(() => {
+    return localStorage.getItem('danang_map_style') || 'street';
+  });
+  const [showStyleMenu, setShowStyleMenu] = useState(false);
+
+  const activeStyle = MAP_STYLES[mapStyleKey] || MAP_STYLES.street;
+
+  function chonKieuBanDo(key) {
+    setMapStyleKey(key);
+    localStorage.setItem('danang_map_style', key);
+    setShowStyleMenu(false);
+  }
+
   const diemCanh = [];
   if (coDuong) {
     diemCanh.push([ketQua.diemDi.lat, ketQua.diemDi.lng], [ketQua.diemDen.lat, ketQua.diemDen.lng]);
@@ -391,10 +447,20 @@ export default function MapView() {
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
       <MapContainer center={[16.0544, 108.2022]} zoom={14} minZoom={1} className="w-full h-full">
         <TileLayer
-          attribution='Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ'
-          url={NEN_CHINH}
-          maxZoom={19}
+          key={activeStyle.id}
+          attribution={activeStyle.attribution}
+          url={activeStyle.url}
+          maxZoom={activeStyle.maxZoom}
         />
+        {activeStyle.overlayUrl && (
+          <TileLayer
+            key={`${activeStyle.id}-overlay`}
+            url={activeStyle.overlayUrl}
+            maxZoom={activeStyle.maxZoom}
+            pane="overlayPane"
+            opacity={0.9}
+          />
+        )}
         <VuaManHinh diem={diemCanh} />
         <BatClick />
         <TatCaTram routes={routes} />
@@ -667,6 +733,60 @@ export default function MapView() {
             Chấm IDS đang duyệt (theo độ sâu L)
           </p>
         )}
+      </div>
+
+      {/* Bộ chọn kiểu bản đồ ở góc dưới bên trái */}
+      <div className="absolute bottom-5 left-4 z-[500] select-none">
+        {showStyleMenu && (
+          <div className="mb-2 bg-white rounded-lg shadow-xl border border-gray-200 p-2 w-64 space-y-1 backdrop-blur bg-white/95 transition-all">
+            <div className="flex items-center justify-between px-2 py-1 border-b border-gray-100 text-xs font-semibold text-gray-500">
+              <span>CHỌN KIỂU BẢN ĐỒ</span>
+              <button
+                onClick={() => setShowStyleMenu(false)}
+                className="text-gray-400 hover:text-gray-600 font-bold px-1"
+              >
+                ✕
+              </button>
+            </div>
+            {Object.values(MAP_STYLES).map((s) => (
+              <button
+                key={s.id}
+                onClick={() => chonKieuBanDo(s.id)}
+                className={`w-full text-left px-3 py-2 rounded flex items-center justify-between text-xs transition-colors ${
+                  mapStyleKey === s.id
+                    ? 'bg-primary text-white font-semibold shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <div>
+                  <p className="font-medium">{s.name}</p>
+                  <p className={`text-[10px] ${mapStyleKey === s.id ? 'text-blue-100' : 'text-gray-400'}`}>
+                    {s.mota}
+                  </p>
+                </div>
+                {mapStyleKey === s.id && (
+                  <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowStyleMenu(!showStyleMenu)}
+          className="flex items-center gap-2 bg-white/95 hover:bg-white text-gray-800 shadow-md border border-gray-200 px-3 py-2 rounded-lg text-xs font-medium transition-all hover:shadow-lg"
+          title="Đổi kiểu bản đồ"
+        >
+          <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+          </svg>
+          <span>Kiểu bản đồ: <b className="text-primary">{activeStyle.name}</b></span>
+          <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showStyleMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
     </div>
   );
