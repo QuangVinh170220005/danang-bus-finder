@@ -85,7 +85,7 @@ export const useBusStore = create((set, get) => ({
     }
 
     // Tìm trạm gần nhất bằng thuật toán IDS trên mạng lưới đường phố
-    const ketQua = timTramGanNhatBangIDS(routes, { lat, lng }, cacTram);
+    const ketQua = await timTramGanNhatBangIDS(routes, { lat, lng }, cacTram);
     if (ma !== demLanTinh) return;
     set({ ganNhat: ketQua ? { ...ketQua, tuyenId, chieu } : { loi: 'Tuyến này chưa có trạm.' } });
   },

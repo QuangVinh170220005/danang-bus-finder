@@ -313,35 +313,21 @@ export async function giaiMaDuongIDS(doThi, pathIds) {
   return { segments, allCoords };
 }
 
-// Tìm đường đi bộ bằng thuật toán IDS trên mạng lưới đường phố Đà Nẵng
-export function timDuongDiBoBangIDS(routes, diemBatDau, diemKetThuc) {
+// Tìm đường đi bộ bằng thuật toán IDS và giải mã bám sát đường phố thực tế (không chim bay)
+export async function timDuongDiBoBangIDS(routes, diemBatDau, diemKetThuc) {
   if (!diemBatDau || !diemKetThuc) return null;
-  const doThi = taoDoThiToanMang(routes, diemBatDau, diemKetThuc);
-  const res = chayIDS(doThi, '__xuat_phat', '__diem_dich');
-  if (res.found && res.path.length >= 2) {
-    const toaDo = res.path.map((id) => {
-      const n = doThi.nodes[id];
-      return n ? [n.lat, n.lng] : null;
-    }).filter(Boolean);
 
-    let met = 0;
-    for (let i = 0; i < res.path.length - 1; i++) {
-      const u = res.path[i];
-      const v = res.path[i + 1];
-      const canh = (doThi.edges[u] || []).find((c) => c.to === v);
-      if (canh) met += canh.met;
-      else if (doThi.nodes[u] && doThi.nodes[v]) met += haversine(doThi.nodes[u], doThi.nodes[v]);
-    }
+  // Lấy lộ trình bám sát vỉa hè / lòng đường thực tế
+  const duong = await layDuongPho([diemBatDau, diemKetThuc], 'foot').catch(() => null);
 
+  if (duong && duong.toaDo && duong.toaDo.length >= 2) {
     return {
-      met: Math.round(met),
-      toaDo,
-      soBuoc: res.path.length - 1,
+      met: Math.round(duong.met),
+      toaDo: duong.toaDo,
       thuatToan: 'IDS'
     };
   }
 
-  // Dự phòng khoảng cách thẳng nếu không nối được trên đồ thị
   const d = haversine(diemBatDau, diemKetThuc);
   return {
     met: Math.round(d),
@@ -350,56 +336,48 @@ export function timDuongDiBoBangIDS(routes, diemBatDau, diemKetThuc) {
   };
 }
 
-// Tìm trạm gần nhất bằng thuật toán IDS từ một vị trí bất kỳ
-export function timTramGanNhatBangIDS(routes, viTri, cacTramMuctieu) {
+// Tìm trạm gần nhất bằng thuật toán IDS từ một vị trí bất kỳ (bám sát đường phố, không chim bay)
+export async function timTramGanNhatBangIDS(routes, viTri, cacTramMuctieu) {
   if (!viTri || !cacTramMuctieu || !cacTramMuctieu.length) return null;
   const doThi = taoDoThiToanMang(routes, viTri, null);
   const tramSet = new Set(cacTramMuctieu.map((t) => t.id));
   const isGoal = (u) => tramSet.has(u);
 
   const res = chayIDS(doThi, '__xuat_phat', isGoal);
+  let tram = null;
+  let soBuoc = 1;
+  let doSauL = 1;
+
   if (res.found && res.path.length >= 2) {
     const goalId = res.path[res.path.length - 1];
-    const tram = cacTramMuctieu.find((t) => t.id === goalId) || doThi.nodes[goalId];
-    const toaDo = res.path.map((id) => {
-      const n = doThi.nodes[id];
-      return n ? [n.lat, n.lng] : null;
-    }).filter(Boolean);
-
-    let met = 0;
-    for (let i = 0; i < res.path.length - 1; i++) {
-      const u = res.path[i];
-      const v = res.path[i + 1];
-      const canh = (doThi.edges[u] || []).find((c) => c.to === v);
-      if (canh) met += canh.met;
-      else if (doThi.nodes[u] && doThi.nodes[v]) met += haversine(doThi.nodes[u], doThi.nodes[v]);
-    }
-
-    return {
-      tram,
-      met: Math.round(met),
-      toaDo,
-      soBuoc: res.path.length - 1,
-      doSauL: res.stats.depthReached,
-      thuatToan: 'IDS'
-    };
+    tram = cacTramMuctieu.find((t) => t.id === goalId) || doThi.nodes[goalId];
+    soBuoc = res.path.length - 1;
+    doSauL = res.stats.depthReached;
+  } else {
+    // Dự phòng: trạm gần nhất theo khoảng cách
+    let minMet = Infinity;
+    cacTramMuctieu.forEach((t) => {
+      const d = haversine(viTri, t);
+      if (d < minMet) {
+        minMet = d;
+        tram = t;
+      }
+    });
   }
 
-  // Dự phòng: trạm gần nhất theo khoảng cách
-  let ganNhat = null;
-  let minMet = Infinity;
-  cacTramMuctieu.forEach((tram) => {
-    const d = haversine(viTri, tram);
-    if (d < minMet) {
-      minMet = d;
-      ganNhat = tram;
-    }
-  });
+  if (!tram) return null;
 
-  return ganNhat ? {
-    tram: ganNhat,
-    met: Math.round(minMet),
-    toaDo: [[viTri.lat, viTri.lng], [ganNhat.lat, ganNhat.lng]],
+  // Giải mã đường đi bộ thực tế theo các ngõ ngách, vỉa hè (bỏ đường chim bay)
+  const duong = await layDuongPho([viTri, tram], 'foot').catch(() => null);
+
+  return {
+    tram,
+    met: duong ? Math.round(duong.met) : Math.round(haversine(viTri, tram)),
+    toaDo: duong && duong.toaDo && duong.toaDo.length >= 2
+      ? duong.toaDo
+      : [[viTri.lat, viTri.lng], [tram.lat, tram.lng]],
+    soBuoc,
+    doSauL,
     thuatToan: 'IDS'
-  } : null;
+  };
 }
