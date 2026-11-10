@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { timDuong } from '../algorithms/timDuong';
 import { layThuTuTram, taoDoThiToanMang } from '../algorithms/graph';
 import { timTramGanNhatTheoPho } from '../algorithms/goiYTuyen';
-import { taoBoChayIDS, bfsPeak, giaiMaDuongIDS } from '../algorithms/ids';
+import { taoBoChayIDS, bfsPeak, giaiMaDuongIDS, timTramGanNhatBangIDS } from '../algorithms/ids';
 
 let demLanTinh = 0;
 let idsTimer = null;
@@ -84,7 +84,8 @@ export const useBusStore = create((set, get) => ({
       cacTram = cacTram.slice(0, tuyenChon.j);
     }
 
-    const ketQua = await timTramGanNhatTheoPho(cacTram, { lat, lng });
+    // Tìm trạm gần nhất bằng thuật toán IDS trên mạng lưới đường phố
+    const ketQua = timTramGanNhatBangIDS(routes, { lat, lng }, cacTram);
     if (ma !== demLanTinh) return;
     set({ ganNhat: ketQua ? { ...ketQua, tuyenId, chieu } : { loi: 'Tuyến này chưa có trạm.' } });
   },

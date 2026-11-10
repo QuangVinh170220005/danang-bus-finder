@@ -1,6 +1,7 @@
 import { haversine } from './haversine';
 import { BAN_KINH_DI_BO, layThuTuTram } from './graph';
 import { layDuongPho } from '../services/vietmap';
+import { timDuongDiBoBangIDS } from './ids';
 
 // Liệt kê các tuyến (cả hai chiều) đi được từ A tới B
 export function goiYTuyen(routes, diemA, diemB, banKinh = BAN_KINH_DI_BO) {
@@ -35,16 +36,15 @@ export function goiYTuyen(routes, diemA, diemB, banKinh = BAN_KINH_DI_BO) {
   return ketQua.sort((a, b) => a.cost - b.cost || a.j - a.i - (b.j - b.i));
 }
 
-// Bổ sung quãng đường đi bộ thực tế theo đường phố cho các lựa chọn tuyến
-export async function capNhatQuangDuongPho(g, diemA, diemB) {
+// Bổ sung quãng đường đi bộ thực tế bằng thuật toán IDS cho các lựa chọn tuyến
+export async function capNhatQuangDuongPho(g, diemA, diemB, routes) {
   const thuTu = layThuTuTram(g.route, g.chieu);
   const tramLen = thuTu[g.i];
   const tramXuong = thuTu[g.j];
 
-  const [duongA, duongB] = await Promise.all([
-    layDuongPho([diemA, tramLen], 'foot'),
-    layDuongPho([tramXuong, diemB], 'foot')
-  ]);
+  // Tìm đường đi bộ bằng thuật toán IDS trên mạng lưới đường phố
+  const duongA = timDuongDiBoBangIDS(routes || [g.route], diemA, tramLen);
+  const duongB = timDuongDiBoBangIDS(routes || [g.route], tramXuong, diemB);
 
   return {
     ...g,

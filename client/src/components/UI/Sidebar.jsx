@@ -146,8 +146,8 @@ export default function Sidebar() {
       }
     });
 
-    // Cập nhật quãng đường đi bộ thực tế theo các tuyến phố
-    capNhatQuangDuongPho(g, goiY.diemDi, goiY.diemDen).then((capNhat) => {
+    // Cập nhật quãng đường đi bộ thực tế bằng thuật toán IDS
+    capNhatQuangDuongPho(g, goiY.diemDi, goiY.diemDen, routes).then((capNhat) => {
       const tc = useBusStore.getState().tuyenChon;
       if (tc && tc.tuyenId === g.route.id && tc.chieu === g.chieu) {
         useBusStore.setState({
@@ -357,7 +357,7 @@ export default function Sidebar() {
               <p className="text-sm text-gray-800">
                 Trạm gần nhất trên tuyến {ganNhat.tuyenId}: <b>{ganNhat.tram.name}</b>
                 <br />
-                Quãng đường đi bộ: <b>{Math.round(ganNhat.met)} m</b> (theo đường phố thực tế)
+                Quãng đường đi bộ: <b>{Math.round(ganNhat.met)} m</b> (theo thuật toán IDS{ganNhat.soBuoc ? `: ${ganNhat.soBuoc} bước` : ''})
               </p>
             )}
           </div>

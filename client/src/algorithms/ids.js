@@ -1,4 +1,6 @@
 import { layDuongPho } from '../services/vietmap';
+import { haversine } from './haversine';
+import { taoDoThiToanMang } from './graph';
 
 const SO_BUOC_THUONG = 200;
 const SO_NUT_TOI_DA = 12000;
@@ -46,7 +48,8 @@ export function chayIDS(doThi, batDau, ketThuc) {
       message: `Xét ${node?.name || nodeId}, độ sâu ${duong.length - 1}`
     });
 
-    if (nodeId === ketThuc) return true;
+    const daToi = typeof ketThuc === 'function' ? ketThuc(nodeId) && nodeId !== batDau : nodeId === ketThuc;
+    if (daToi) return true;
     if (doSauConLai === 0) return false;
 
     const cacCanh = (doThi.edges[nodeId] || [])
@@ -308,4 +311,95 @@ export async function giaiMaDuongIDS(doThi, pathIds) {
   });
 
   return { segments, allCoords };
+}
+
+// Tìm đường đi bộ bằng thuật toán IDS trên mạng lưới đường phố Đà Nẵng
+export function timDuongDiBoBangIDS(routes, diemBatDau, diemKetThuc) {
+  if (!diemBatDau || !diemKetThuc) return null;
+  const doThi = taoDoThiToanMang(routes, diemBatDau, diemKetThuc);
+  const res = chayIDS(doThi, '__xuat_phat', '__diem_dich');
+  if (res.found && res.path.length >= 2) {
+    const toaDo = res.path.map((id) => {
+      const n = doThi.nodes[id];
+      return n ? [n.lat, n.lng] : null;
+    }).filter(Boolean);
+
+    let met = 0;
+    for (let i = 0; i < res.path.length - 1; i++) {
+      const u = res.path[i];
+      const v = res.path[i + 1];
+      const canh = (doThi.edges[u] || []).find((c) => c.to === v);
+      if (canh) met += canh.met;
+      else if (doThi.nodes[u] && doThi.nodes[v]) met += haversine(doThi.nodes[u], doThi.nodes[v]);
+    }
+
+    return {
+      met: Math.round(met),
+      toaDo,
+      soBuoc: res.path.length - 1,
+      thuatToan: 'IDS'
+    };
+  }
+
+  // Dự phòng khoảng cách thẳng nếu không nối được trên đồ thị
+  const d = haversine(diemBatDau, diemKetThuc);
+  return {
+    met: Math.round(d),
+    toaDo: [[diemBatDau.lat, diemBatDau.lng], [diemKetThuc.lat, diemKetThuc.lng]],
+    thuatToan: 'IDS'
+  };
+}
+
+// Tìm trạm gần nhất bằng thuật toán IDS từ một vị trí bất kỳ
+export function timTramGanNhatBangIDS(routes, viTri, cacTramMuctieu) {
+  if (!viTri || !cacTramMuctieu || !cacTramMuctieu.length) return null;
+  const doThi = taoDoThiToanMang(routes, viTri, null);
+  const tramSet = new Set(cacTramMuctieu.map((t) => t.id));
+  const isGoal = (u) => tramSet.has(u);
+
+  const res = chayIDS(doThi, '__xuat_phat', isGoal);
+  if (res.found && res.path.length >= 2) {
+    const goalId = res.path[res.path.length - 1];
+    const tram = cacTramMuctieu.find((t) => t.id === goalId) || doThi.nodes[goalId];
+    const toaDo = res.path.map((id) => {
+      const n = doThi.nodes[id];
+      return n ? [n.lat, n.lng] : null;
+    }).filter(Boolean);
+
+    let met = 0;
+    for (let i = 0; i < res.path.length - 1; i++) {
+      const u = res.path[i];
+      const v = res.path[i + 1];
+      const canh = (doThi.edges[u] || []).find((c) => c.to === v);
+      if (canh) met += canh.met;
+      else if (doThi.nodes[u] && doThi.nodes[v]) met += haversine(doThi.nodes[u], doThi.nodes[v]);
+    }
+
+    return {
+      tram,
+      met: Math.round(met),
+      toaDo,
+      soBuoc: res.path.length - 1,
+      doSauL: res.stats.depthReached,
+      thuatToan: 'IDS'
+    };
+  }
+
+  // Dự phòng: trạm gần nhất theo khoảng cách
+  let ganNhat = null;
+  let minMet = Infinity;
+  cacTramMuctieu.forEach((tram) => {
+    const d = haversine(viTri, tram);
+    if (d < minMet) {
+      minMet = d;
+      ganNhat = tram;
+    }
+  });
+
+  return ganNhat ? {
+    tram: ganNhat,
+    met: Math.round(minMet),
+    toaDo: [[viTri.lat, viTri.lng], [ganNhat.lat, ganNhat.lng]],
+    thuatToan: 'IDS'
+  } : null;
 }
