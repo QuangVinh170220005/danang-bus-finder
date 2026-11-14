@@ -3,6 +3,34 @@ import { BAN_KINH_DI_BO, layThuTuTram } from './graph';
 import { layDuongPho } from '../services/vietmap';
 import { timDuongDiBoBangIDS } from './ids';
 
+const MET_MOI_PHUT_DI_BO = 5000 / 60;
+const MET_MOI_PHUT_XE = 20000 / 60;
+
+export function thongKeHanhTrinh(route, chieu, i, j, metDi, metDen) {
+  const thuTu = layThuTuTram(route, chieu);
+  let metXe = 0;
+  for (let k = i; k < j; k++) metXe += haversine(thuTu[k], thuTu[k + 1]);
+  metXe = Math.round(metXe);
+  const metDiBo = Math.round(metDi + metDen);
+  const tongMet = metXe + metDiBo;
+  const soTram = j - i + 1;
+  const phut = metDiBo / MET_MOI_PHUT_DI_BO + metXe / MET_MOI_PHUT_XE;
+  return { soTram, metXe, metDiBo, tongMet, phut };
+}
+
+export function formatKm(met) {
+  if (met < 1000) return `${Math.round(met)} m`;
+  return `${(met / 1000).toFixed(1)} km`;
+}
+
+export function formatPhut(phut) {
+  const p = Math.max(1, Math.round(phut));
+  if (p < 60) return `${p} phút`;
+  const gio = Math.floor(p / 60);
+  const du = p % 60;
+  return du ? `${gio} giờ ${du} phút` : `${gio} giờ`;
+}
+
 // Liệt kê các tuyến (cả hai chiều) đi được từ A tới B
 export function goiYTuyen(routes, diemA, diemB, banKinh = BAN_KINH_DI_BO) {
   const ketQua = [];

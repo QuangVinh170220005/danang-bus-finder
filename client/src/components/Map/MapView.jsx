@@ -466,6 +466,7 @@ export default function MapView() {
     idsResult,
     currentStep,
     tuyenChon,
+    goiY,
     chonViTri,
     viTriBatKy,
     ganNhat,
@@ -525,9 +526,16 @@ export default function MapView() {
     diemCanh.push([ketQua.diemDi.lat, ketQua.diemDi.lng], [ketQua.diemDen.lat, ketQua.diemDen.lng]);
     ketQua.cacTram.forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
   } else if (chon) {
-    // Chỉ tự căn bản đồ khi vừa chọn một tuyến. Đặt điểm A, B hay chọn vị trí bất kỳ không làm bản đồ nhảy.
     tramTheoChieu.slice(chon.i, chon.j + 1).forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
     diemCanh.push([chon.diemDi.lat, chon.diemDi.lng], [chon.diemDen.lat, chon.diemDen.lng]);
+  } else if (goiY?.ds?.length) {
+    diemCanh.push([goiY.diemDi.lat, goiY.diemDi.lng], [goiY.diemDen.lat, goiY.diemDen.lng]);
+    goiY.ds.forEach((g) => {
+      const thuTu = layThuTuTram(g.route, g.chieu);
+      thuTu.slice(g.i, g.j + 1).forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
+    });
+  } else if (diemDiNhap && diemDenNhap) {
+    diemCanh.push([diemDiNhap.lat, diemDiNhap.lng], [diemDenNhap.lat, diemDenNhap.lng]);
   } else if (idsFinalRoadCoords && idsFinalRoadCoords.length > 0) {
     idsFinalRoadCoords.forEach((p) => diemCanh.push(p));
   } else if (idsFinalPath && idsFinalPath.length > 0) {
@@ -542,7 +550,7 @@ export default function MapView() {
     ? 'Bấm bản đồ để chọn điểm đến'
     : cheDoChon === 'di'
     ? 'Bấm bản đồ để chọn điểm đi'
-    : 'Bấm nút "Chọn điểm đi" hoặc "Chọn điểm đến" ở cột trái rồi bấm bản đồ';
+    : 'Chọn điểm đi hoặc điểm đến ở cột trái, rồi bấm lên bản đồ';
 
   return (
     <div className={`w-full h-full relative ${dangChonDiem ? '[&_.leaflet-grab]:!cursor-crosshair' : ''}`}>
@@ -588,6 +596,27 @@ export default function MapView() {
         <VuaManHinh diem={diemCanh} />
         <BatClick />
         <TatCaTram routes={routes} />
+
+        {!coDuong && goiY?.ds?.map((g, idx) => {
+          const dangChon = tuyenChon && tuyenChon.tuyenId === g.route.id && tuyenChon.chieu === g.chieu;
+          if (dangChon) return null;
+          const thuTu = layThuTuTram(g.route, g.chieu);
+          const doan = thuTu.slice(g.i, g.j + 1);
+          const mau = ['#1a73e8', '#e67e22', '#0f9d78', '#6b5bd6', '#d6428f', '#0891b2', '#ca8a04', '#be123c'][idx % 8];
+          return (
+            <Polyline
+              key={`goi-y-${g.route.id}-${g.chieu}`}
+              positions={doan.map((tram) => [tram.lat, tram.lng])}
+              pathOptions={{ color: mau, weight: 4, opacity: 0.8 }}
+            >
+              <Popup>
+                Tuyến {g.route.id}, {tenChieu(g.chieu)}
+                <br />
+                {g.thongKe ? `${g.thongKe.soTram} trạm` : ''}
+              </Popup>
+            </Polyline>
+          );
+        })}
 
         {!coDuong && tramTheoChieu.length > 1 && (
           <DuongTheoPho diem={tramTheoChieu} mau={mauChieu} weight={chon ? 4 : 4} doDuc={chon ? 0.35 : 0.95} />

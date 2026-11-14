@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { timDuong } from '../algorithms/timDuong';
-import { layThuTuTram, taoDoThiToanMang } from '../algorithms/graph';
-import { timTramGanNhatTheoPho } from '../algorithms/goiYTuyen';
+import { BAN_KINH_DI_BO, layThuTuTram, taoDoThiToanMang } from '../algorithms/graph';
+import { goiYTuyen, thongKeHanhTrinh } from '../algorithms/goiYTuyen';
 import { taoBoChayIDS, bfsPeak, giaiMaDuongIDS, timTramGanNhatBangIDS } from '../algorithms/ids';
+import { chonTuyenBangIDS } from '../algorithms/chonBangIDS';
 
 let demLanTinh = 0;
 let idsTimer = null;
@@ -26,6 +27,10 @@ export const useBusStore = create((set, get) => ({
   routes: [],
   tuyenId: '01',
   chieu: 'di',
+  banKinh: BAN_KINH_DI_BO,
+  phuongAn: null,
+  tieuChiDangXem: 'itTram',
+  dangLayViTri: null,
   yeuCau: null,
   ketQua: null,
   chuoiDi: '16.0742, 108.2290',
@@ -59,6 +64,7 @@ export const useBusStore = create((set, get) => ({
 
   setRoutes: (routes) => set({ routes }),
   setTuyen: (tuyenId, chieu) => set({ tuyenId, chieu }),
+  setBanKinh: (banKinh) => set({ banKinh }),
   setChuoiDi: (chuoiDi) => set({ chuoiDi }),
   setChuoiDen: (chuoiDen) => set({ chuoiDen }),
   setCachNhap: (cachNhap) => set({ cachNhap }),
@@ -105,14 +111,26 @@ export const useBusStore = create((set, get) => ({
       return;
     }
     if (che === 'den') {
-      set({ chuoiDen: chuoi, cheDoChon: null, goiY: null, tuyenChon: null, viTriBatKy: null, ganNhat: null });
+      set({
+        chuoiDen: chuoi,
+        cheDoChon: null,
+        goiY: null,
+        tuyenChon: null,
+        phuongAn: null,
+        viTriBatKy: null,
+        ganNhat: null,
+        ketQua: null,
+        idsResult: null
+      });
+      if (docToaDo(get().chuoiDi)) get().timCacTuyen();
       return;
     }
     set({
       cheDoChon: null,
-  nhacNho: '',
+      nhacNho: '',
       goiY: null,
       tuyenChon: null,
+      phuongAn: null,
       viTriBatKy: null,
       ganNhat: null,
       chuoiDi: chuoi,
@@ -125,6 +143,125 @@ export const useBusStore = create((set, get) => ({
       currentStep: 0,
       isPlaying: false
     });
+    if (docToaDo(get().chuoiDen)) get().timCacTuyen();
+  },
+
+  timCacTuyen: () => {
+    const { routes, chuoiDi, chuoiDen, banKinh } = get();
+    const diemDi = docToaDo(chuoiDi);
+    const diemDen = docToaDo(chuoiDen);
+    if (!diemDi || !diemDen) {
+      set({ nhacNho: 'Nhập đủ tọa độ điểm đi và điểm đến. Dạng 16.07, 108.22' });
+      return;
+    }
+
+    const ds = goiYTuyen(routes, diemDi, diemDen, banKinh).map((g) => ({
+      ...g,
+      thongKe: thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen)
+    }));
+
+    set({
+      nhacNho: '',
+      goiY: { diemDi, diemDen, ds, banKinh },
+      tuyenChon: null,
+      phuongAn: null,
+      tieuChiDangXem: 'itTram',
+      ketQua: null,
+      idsResult: null,
+      bfsResult: null,
+      yeuCau: null,
+      viTriBatKy: null,
+      ganNhat: null,
+      chonViTri: false,
+      tramXemId: null,
+      currentStep: 0,
+      isPlaying: false
+    });
+  },
+
+  chonMotTuyen: (g) => {
+    const { goiY } = get();
+    if (!goiY) return;
+    set({
+      tuyenId: g.route.id,
+      chieu: g.chieu,
+      tuyenChon: {
+        tuyenId: g.route.id,
+        chieu: g.chieu,
+        i: g.i,
+        j: g.j,
+        metDi: g.metDi,
+        metDen: g.metDen,
+        diemDi: goiY.diemDi,
+        diemDen: goiY.diemDen
+      }
+    });
+  },
+
+  chayIDSHaiPhuongAn: () => {
+    const { goiY } = get();
+    if (!goiY?.ds?.length) {
+      set({ nhacNho: 'Chưa có tuyến nào đi được từ A đến B để IDS chọn.' });
+      return;
+    }
+
+    const itTram = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'itTram');
+    const nganNhat = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'nganNhat');
+    const dangXem = itTram.thanhCong ? itTram : nganNhat;
+
+    set({
+      phuongAn: { itTram, nganNhat },
+      tieuChiDangXem: itTram.thanhCong ? 'itTram' : 'nganNhat',
+      ketQua: dangXem.thanhCong ? dangXem : null,
+      idsResult: dangXem.ids || null,
+      bfsResult: null,
+      tuyenId: dangXem.thanhCong ? dangXem.tuyenId : get().tuyenId,
+      chieu: dangXem.thanhCong ? dangXem.chieu : get().chieu,
+      tuyenChon: null,
+      nhacNho: dangXem.thanhCong ? '' : 'IDS không chọn được tuyến.',
+      currentStep: 0,
+      isPlaying: false,
+      tramXemId: null
+    });
+  },
+
+  xemPhuongAn: (tieuChi) => {
+    const kq = get().phuongAn?.[tieuChi];
+    if (!kq?.thanhCong) return;
+    set({
+      tieuChiDangXem: tieuChi,
+      ketQua: kq,
+      idsResult: kq.ids,
+      tuyenId: kq.tuyenId,
+      chieu: kq.chieu,
+      tuyenChon: null,
+      currentStep: 0
+    });
+  },
+
+  layViTriHienTai: (loai) => {
+    if (!navigator.geolocation) {
+      set({ nhacNho: 'Trình duyệt không lấy được vị trí hiện tại.' });
+      return;
+    }
+
+    set({ dangLayViTri: loai, nhacNho: 'Đang lấy vị trí hiện tại...' });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const chuoi = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+        if (loai === 'den') set({ chuoiDen: chuoi, dangLayViTri: null, cheDoChon: null });
+        else set({ chuoiDi: chuoi, dangLayViTri: null, cheDoChon: null, diemKeTiep: 'den' });
+        set({ goiY: null, phuongAn: null, ketQua: null, idsResult: null, tuyenChon: null, nhacNho: '' });
+        if (docToaDo(get().chuoiDi) && docToaDo(get().chuoiDen)) get().timCacTuyen();
+      },
+      () => {
+        set({
+          dangLayViTri: null,
+          nhacNho: 'Không lấy được vị trí. Hãy cho phép trình duyệt dùng vị trí rồi thử lại.'
+        });
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
+    );
   },
 
   ganKetQua: (ketQua) =>
@@ -344,6 +481,7 @@ export const useBusStore = create((set, get) => ({
       idsFinalSegments: null,
       idsFinalRoadCoords: null,
       streetLines: null,
+      phuongAn: null,
       currentStep: 0,
       isPlaying: false,
       tramXemId: null
