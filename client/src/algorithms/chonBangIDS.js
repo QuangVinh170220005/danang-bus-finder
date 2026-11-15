@@ -51,10 +51,20 @@ function dungDoThi(ds, diemDi, diemDen) {
       chieu: g.chieu
     });
 
+    let tongHaversineXe = 0;
+    const metHaversine = [];
+    for (let k = 0; k < doan.length - 1; k++) {
+      const d = haversine(doan[k], doan[k + 1]);
+      metHaversine.push(d);
+      tongHaversineXe += d;
+    }
+    const metXeThucTe = g.daCapNhatPho && g.thongKe?.metXe > 0 ? g.thongKe.metXe : 0;
+    const tiLeXe = metXeThucTe > 0 && tongHaversineXe > 0 ? metXeThucTe / tongHaversineXe : 1;
+
     for (let k = 0; k < doan.length - 1; k++) {
       edges[`t${idx}_${k}`].push({
         to: `t${idx}_${k + 1}`,
-        met: Math.round(haversine(doan[k], doan[k + 1])),
+        met: Math.round(metHaversine[k] * tiLeXe),
         loai: 'xe',
         tuyenId: g.route.id,
         chieu: g.chieu

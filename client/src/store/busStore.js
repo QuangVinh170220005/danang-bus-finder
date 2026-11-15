@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { timDuong } from '../algorithms/timDuong';
 import { BAN_KINH_DI_BO, layThuTuTram, taoDoThiToanMang } from '../algorithms/graph';
-import { goiYTuyen, thongKeHanhTrinh } from '../algorithms/goiYTuyen';
+import { capNhatQuangDuongPho, goiYTuyen, thongKeHanhTrinh } from '../algorithms/goiYTuyen';
 import { taoBoChayIDS, bfsPeak, giaiMaDuongIDS, timTramGanNhatBangIDS } from '../algorithms/ids';
 import { chonTuyenBangIDS } from '../algorithms/chonBangIDS';
 
@@ -155,14 +155,35 @@ export const useBusStore = create((set, get) => ({
       return;
     }
 
-    const ds = goiYTuyen(routes, diemDi, diemDen).map((g) => ({
-      ...g,
-      thongKe: thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen)
-    }));
+    const ds = goiYTuyen(routes, diemDi, diemDen)
+      .map((g) => ({
+        ...g,
+        thongKe: thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen)
+      }))
+      .sort((a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram);
+
+    const capNhatPhoPromise = Promise.all(
+      ds.map((g) => capNhatQuangDuongPho(g, diemDi, diemDen))
+    ).then((dsPho) => {
+      const dsDaXep = dsPho.sort(
+        (a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram
+      );
+      const hienTai = get().goiY;
+      if (
+        hienTai &&
+        hienTai.diemDi.lat === diemDi.lat &&
+        hienTai.diemDi.lng === diemDi.lng &&
+        hienTai.diemDen.lat === diemDen.lat &&
+        hienTai.diemDen.lng === diemDen.lng
+      ) {
+        set({ goiY: { diemDi, diemDen, ds: dsDaXep, dangTinhPho: false } });
+      }
+      return dsDaXep;
+    });
 
     set({
       nhacNho: '',
-      goiY: { diemDi, diemDen, ds },
+      goiY: { diemDi, diemDen, ds, dangTinhPho: true, capNhatPhoPromise },
       tuyenChon: null,
       phuongAn: null,
       tieuChiDangXem: 'itTram',
@@ -185,6 +206,11 @@ export const useBusStore = create((set, get) => ({
     set({
       tuyenId: g.route.id,
       chieu: g.chieu,
+      ketQua: null,
+      idsResult: null,
+      currentStep: 0,
+      isPlaying: false,
+      tramXemId: null,
       tuyenChon: {
         tuyenId: g.route.id,
         chieu: g.chieu,
@@ -192,17 +218,25 @@ export const useBusStore = create((set, get) => ({
         j: g.j,
         metDi: g.metDi,
         metDen: g.metDen,
+        toaDoDi: g.toaDoDi || null,
+        toaDoDen: g.toaDoDen || null,
         diemDi: goiY.diemDi,
         diemDen: goiY.diemDen
       }
     });
   },
 
-  chayIDSHaiPhuongAn: () => {
-    const { goiY } = get();
+  chayIDSHaiPhuongAn: async () => {
+    let { goiY } = get();
     if (!goiY?.ds?.length) {
       set({ nhacNho: 'Chưa có tuyến nào đi được từ A đến B để IDS chọn.' });
       return;
+    }
+
+    if (goiY.dangTinhPho && goiY.capNhatPhoPromise) {
+      await goiY.capNhatPhoPromise;
+      goiY = get().goiY;
+      if (!goiY?.ds?.length) return;
     }
 
     const itTram = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'itTram');

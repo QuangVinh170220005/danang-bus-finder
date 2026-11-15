@@ -6,11 +6,15 @@ import { timDuongDiBoBangIDS } from './ids';
 const MET_MOI_PHUT_DI_BO = 5000 / 60;
 const MET_MOI_PHUT_XE = 20000 / 60;
 
-export function thongKeHanhTrinh(route, chieu, i, j, metDi, metDen) {
+export function thongKeHanhTrinh(route, chieu, i, j, metDi, metDen, metXeThucTe = null) {
   const thuTu = layThuTuTram(route, chieu);
   let metXe = 0;
-  for (let k = i; k < j; k++) metXe += haversine(thuTu[k], thuTu[k + 1]);
-  metXe = Math.round(metXe);
+  if (typeof metXeThucTe === 'number' && metXeThucTe > 0) {
+    metXe = Math.round(metXeThucTe);
+  } else {
+    for (let k = i; k < j; k++) metXe += haversine(thuTu[k], thuTu[k + 1]);
+    metXe = Math.round(metXe);
+  }
   const metDiBo = Math.round(metDi + metDen);
   const tongMet = metXe + metDiBo;
   const soTram = j - i + 1;
@@ -64,22 +68,33 @@ export function goiYTuyen(routes, diemA, diemB, banKinh = Infinity) {
   return ketQua.sort((a, b) => a.cost - b.cost || a.j - a.i - (b.j - b.i));
 }
 
-// Bổ sung quãng đường đi bộ thực tế bằng thuật toán IDS cho các lựa chọn tuyến
-export async function capNhatQuangDuongPho(g, diemA, diemB, routes) {
+// Bổ sung quãng đường thực tế theo đường phố cho các lựa chọn tuyến
+export async function capNhatQuangDuongPho(g, diemA, diemB) {
   const thuTu = layThuTuTram(g.route, g.chieu);
-  const tramLen = thuTu[g.i];
-  const tramXuong = thuTu[g.j];
+  const doan = thuTu.slice(g.i, g.j + 1);
+  const tramLen = doan[0];
+  const tramXuong = doan[doan.length - 1];
 
-  // Tìm đường đi bộ bằng thuật toán IDS trên mạng lưới đường phố
-  const duongA = timDuongDiBoBangIDS(routes || [g.route], diemA, tramLen);
-  const duongB = timDuongDiBoBangIDS(routes || [g.route], tramXuong, diemB);
+  const [duongA, duongB, duongXe] = await Promise.all([
+    layDuongPho([diemA, tramLen], 'foot').catch(() => null),
+    layDuongPho([tramXuong, diemB], 'foot').catch(() => null),
+    doan.length >= 2 ? layDuongPho(doan, 'motorcycle').catch(() => null) : Promise.resolve(null)
+  ]);
+
+  const metDi = duongA ? Math.round(duongA.met) : Math.round(g.metDi);
+  const metDen = duongB ? Math.round(duongB.met) : Math.round(g.metDen);
+  const metXeThucTe = duongXe?.met ?? null;
+  const thongKe = thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, metDi, metDen, metXeThucTe);
 
   return {
     ...g,
-    metDi: duongA ? Math.round(duongA.met) : Math.round(g.metDi),
-    metDen: duongB ? Math.round(duongB.met) : Math.round(g.metDen),
+    metDi,
+    metDen,
+    cost: metDi + metDen,
     toaDoDi: duongA ? duongA.toaDo : null,
-    toaDoDen: duongB ? duongB.toaDo : null
+    toaDoDen: duongB ? duongB.toaDo : null,
+    thongKe,
+    daCapNhatPho: true
   };
 }
 

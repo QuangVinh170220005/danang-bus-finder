@@ -530,10 +530,6 @@ export default function MapView() {
     diemCanh.push([chon.diemDi.lat, chon.diemDi.lng], [chon.diemDen.lat, chon.diemDen.lng]);
   } else if (goiY?.ds?.length) {
     diemCanh.push([goiY.diemDi.lat, goiY.diemDi.lng], [goiY.diemDen.lat, goiY.diemDen.lng]);
-    goiY.ds.forEach((g) => {
-      const thuTu = layThuTuTram(g.route, g.chieu);
-      thuTu.slice(g.i, g.j + 1).forEach((tram) => diemCanh.push([tram.lat, tram.lng]));
-    });
   } else if (diemDiNhap && diemDenNhap) {
     diemCanh.push([diemDiNhap.lat, diemDiNhap.lng], [diemDenNhap.lat, diemDenNhap.lng]);
   } else if (idsFinalRoadCoords && idsFinalRoadCoords.length > 0) {
