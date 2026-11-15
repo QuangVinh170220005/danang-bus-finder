@@ -1,5 +1,5 @@
 import { haversine } from './haversine';
-import { BAN_KINH_DI_BO, layThuTuTram } from './graph';
+import { layThuTuTram } from './graph';
 import { layDuongPho } from '../services/vietmap';
 import { timDuongDiBoBangIDS } from './ids';
 
@@ -32,7 +32,7 @@ export function formatPhut(phut) {
 }
 
 // Liệt kê các tuyến (cả hai chiều) đi được từ A tới B
-export function goiYTuyen(routes, diemA, diemB, banKinh = BAN_KINH_DI_BO) {
+export function goiYTuyen(routes, diemA, diemB, banKinh = Infinity) {
   const ketQua = [];
 
   routes.forEach((route) => {

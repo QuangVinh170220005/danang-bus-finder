@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useBusStore } from '../../store/busStore';
-import { tenChieu } from '../../algorithms/graph';
+import { layThuTuTram, tenChieu } from '../../algorithms/graph';
 import { formatKm, formatPhut } from '../../algorithms/goiYTuyen';
 import IDSVisualizer from '../Algorithm/IDSVisualizer';
 
@@ -56,8 +57,6 @@ export default function Sidebar() {
     chuoiDen,
     setChuoiDi,
     setChuoiDen,
-    banKinh,
-    setBanKinh,
     timCacTuyen,
     chonMotTuyen,
     xoaKetQua,
@@ -66,9 +65,10 @@ export default function Sidebar() {
     nhacNho
   } = useBusStore();
 
-  function doiBanKinh(gia) {
-    setBanKinh(gia);
-    if (useBusStore.getState().goiY) timCacTuyen();
+  const [moLoTrinh, setMoLoTrinh] = useState({});
+
+  function toggleLoTrinh(key) {
+    setMoLoTrinh((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   function xoaTatCa() {
@@ -106,21 +106,6 @@ export default function Sidebar() {
 
         {nhacNho && <p className="text-sm text-red-700">{nhacNho}</p>}
 
-        <label className="flex items-center justify-between gap-2 text-sm text-gray-700">
-          Đi bộ tối đa tới trạm
-          <span className="flex items-center gap-2">
-            <input
-              type="range"
-              min="200"
-              max="2000"
-              step="100"
-              value={banKinh}
-              onChange={(event) => doiBanKinh(+event.target.value)}
-            />
-            <b className="w-14 text-right">{banKinh} m</b>
-          </span>
-        </label>
-
         <div className="flex gap-2">
           <button
             onClick={timCacTuyen}
@@ -138,21 +123,47 @@ export default function Sidebar() {
             <p className="text-sm font-bold text-gray-800">2. Các tuyến đi được</p>
             <p className="text-sm text-gray-700">
               {goiY.ds.length
-                ? `${goiY.ds.length} tuyến trong vòng ${goiY.banKinh} m đi bộ. Bấm một tuyến để xem trên bản đồ.`
-                : `Không có tuyến nào trong vòng ${goiY.banKinh} m đi bộ. Hãy tăng bán kính hoặc chọn điểm gần trạm hơn.`}
+                ? `${goiY.ds.length} tuyến có thể đi từ A đến B. Bấm một tuyến để xem trên bản đồ.`
+                : 'Không tìm thấy tuyến phù hợp.'}
             </p>
             {goiY.ds.map((g) => {
+              const key = `${g.route.id}-${g.chieu}`;
               const dangChon = tuyenChon && tuyenChon.tuyenId === g.route.id && tuyenChon.chieu === g.chieu;
+              const doanTram = layThuTuTram(g.route, g.chieu).slice(g.i, g.j + 1);
+              const loTrinh = doanTram.map((tram) => tram.name).join(' - ');
+              const dangMo = !!moLoTrinh[key];
               return (
-                <button
-                  key={`${g.route.id}-${g.chieu}`}
-                  onClick={() => chonMotTuyen(g)}
-                  className={`block w-full text-left text-sm border rounded px-3 py-2 ${dangChon ? 'border-primary bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                <div
+                  key={key}
+                  className={`border rounded text-sm ${dangChon ? 'border-primary bg-blue-50' : 'border-gray-200 bg-white'}`}
                 >
-                  <span className="font-semibold">Tuyến {g.route.id}</span>, {tenChieu(g.chieu)}
-                  <br />
-                  <DongThongKe thongKe={g.thongKe} />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => chonMotTuyen(g)}
+                    className="block w-full text-left px-3 py-2 hover:bg-gray-50/70 rounded-t"
+                  >
+                    <span className="font-semibold">Tuyến {g.route.id}</span>, {tenChieu(g.chieu)}
+                    <br />
+                    <DongThongKe thongKe={g.thongKe} />
+                  </button>
+                  {loTrinh && (
+                    <div className="border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => toggleLoTrinh(key)}
+                        className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-primary font-medium hover:bg-gray-50"
+                      >
+                        <span>{dangMo ? 'Ẩn lộ trình' : `Xem lộ trình (${doanTram.length} trạm)`}</span>
+                        <span>{dangMo ? '▾' : '▸'}</span>
+                      </button>
+                      {dangMo && (
+                        <div className="px-3 pb-2.5 pt-1 text-xs text-gray-700 leading-relaxed">
+                          {loTrinh}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
             {goiY.ds.length > 0 && (

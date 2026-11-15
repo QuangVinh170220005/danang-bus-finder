@@ -487,7 +487,7 @@ export default function MapView() {
     : routes.find((route) => route.id === tuyenId);
   const chieuVe = coDuong ? ketQua.chieu : chieu;
   const tramTheoChieu = coDuong || chon ? layThuTuTram(tuyenVe, chieuVe) : [];
-  const mauChieu = chieuVe === 've' ? '#e67e22' : '#1a73e8';
+  const mauChieu = '#1a73e8';
   const cacLan = gomCacLan(idsResult?.steps || []);
   const lanDangXem = cacLan[currentStep];
   const chamLanNay = lanDangXem?.loai === 'thu' ? lanDangXem.nut : [];
@@ -596,27 +596,6 @@ export default function MapView() {
         <VuaManHinh diem={diemCanh} />
         <BatClick />
         <TatCaTram routes={routes} />
-
-        {!coDuong && goiY?.ds?.map((g, idx) => {
-          const dangChon = tuyenChon && tuyenChon.tuyenId === g.route.id && tuyenChon.chieu === g.chieu;
-          if (dangChon) return null;
-          const thuTu = layThuTuTram(g.route, g.chieu);
-          const doan = thuTu.slice(g.i, g.j + 1);
-          const mau = ['#1a73e8', '#e67e22', '#0f9d78', '#6b5bd6', '#d6428f', '#0891b2', '#ca8a04', '#be123c'][idx % 8];
-          return (
-            <Polyline
-              key={`goi-y-${g.route.id}-${g.chieu}`}
-              positions={doan.map((tram) => [tram.lat, tram.lng])}
-              pathOptions={{ color: mau, weight: 4, opacity: 0.8 }}
-            >
-              <Popup>
-                Tuyến {g.route.id}, {tenChieu(g.chieu)}
-                <br />
-                {g.thongKe ? `${g.thongKe.soTram} trạm` : ''}
-              </Popup>
-            </Polyline>
-          );
-        })}
 
         {!coDuong && tramTheoChieu.length > 1 && (
           <DuongTheoPho diem={tramTheoChieu} mau={mauChieu} weight={chon ? 4 : 4} doDuc={chon ? 0.35 : 0.95} />

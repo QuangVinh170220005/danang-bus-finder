@@ -147,7 +147,7 @@ export const useBusStore = create((set, get) => ({
   },
 
   timCacTuyen: () => {
-    const { routes, chuoiDi, chuoiDen, banKinh } = get();
+    const { routes, chuoiDi, chuoiDen } = get();
     const diemDi = docToaDo(chuoiDi);
     const diemDen = docToaDo(chuoiDen);
     if (!diemDi || !diemDen) {
@@ -155,14 +155,14 @@ export const useBusStore = create((set, get) => ({
       return;
     }
 
-    const ds = goiYTuyen(routes, diemDi, diemDen, banKinh).map((g) => ({
+    const ds = goiYTuyen(routes, diemDi, diemDen).map((g) => ({
       ...g,
       thongKe: thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen)
     }));
 
     set({
       nhacNho: '',
-      goiY: { diemDi, diemDen, ds, banKinh },
+      goiY: { diemDi, diemDen, ds },
       tuyenChon: null,
       phuongAn: null,
       tieuChiDangXem: 'itTram',
