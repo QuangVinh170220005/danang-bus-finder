@@ -42,7 +42,7 @@ function giaiMaPolyline(str) {
   return coords;
 }
 
-// Goong Direction API (nguồn chính vẽ đường theo đường phố Việt Nam)
+// Goong Direction API (nguồn duy nhất vẽ đường theo đường phố Việt Nam, có retry nếu 429)
 async function taiDuongGoong(cacDiem, phuongTien) {
   const key = layGoongApiKey();
   if (!key || cacDiem.length < 2) return null;
@@ -61,21 +61,28 @@ async function taiDuongGoong(cacDiem, phuongTien) {
     api_key: key
   });
 
-  try {
-    const phanHoi = await fetch(`https://rsapi.goong.io/Direction?${params}`, {
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!phanHoi.ok) return null;
-    const data = await phanHoi.json();
-    const route = data.routes?.[0];
-    const toaDo = giaiMaPolyline(route?.overview_polyline?.points);
-    const met = (route?.legs || []).reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+  const url = `https://rsapi.goong.io/Direction?${params}`;
 
-    if (toaDo.length >= 2) {
-      return { toaDo, met };
+  for (let lan = 0; lan < 4; lan++) {
+    try {
+      const phanHoi = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (phanHoi.status === 429 && lan < 3) {
+        await new Promise((r) => setTimeout(r, 400 * (lan + 1) + Math.random() * 200));
+        continue;
+      }
+      if (!phanHoi.ok) return null;
+      const data = await phanHoi.json();
+      const route = data.routes?.[0];
+      const toaDo = giaiMaPolyline(route?.overview_polyline?.points);
+      const met = (route?.legs || []).reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+
+      if (toaDo.length >= 2) {
+        return { toaDo, met };
+      }
+      return null;
+    } catch {
+      if (lan < 3) await new Promise((r) => setTimeout(r, 300 * (lan + 1)));
     }
-  } catch {
-    // Fallback sang OSRM nếu Goong lỗi mạng/timeout
   }
 
   return null;
@@ -125,38 +132,6 @@ export async function layMaTranKhoangCach(origins, destinations, vehicle = 'bike
   return ketQua;
 }
 
-// Máy chủ định tuyến dự phòng (OpenStreetMap & OSRM)
-async function taiDuongOSRM(cacDiem, phuongTien = 'foot') {
-  const chuoi = cacDiem.map((diem) => `${diem.lng},${diem.lat}`).join(';');
-  const profile = phuongTien === 'foot' ? 'foot' : 'driving';
-
-  const urls = [
-    phuongTien === 'foot'
-      ? `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${chuoi}?overview=full&geometries=geojson`
-      : `https://routing.openstreetmap.de/routed-car/route/v1/driving/${chuoi}?overview=full&geometries=geojson`,
-    `https://router.project-osrm.org/route/v1/${profile}/${chuoi}?overview=full&geometries=geojson`
-  ];
-
-  for (const url of urls) {
-    try {
-      const phanHoi = await fetch(url, { signal: AbortSignal.timeout(3500) });
-      if (!phanHoi.ok) continue;
-      const data = await phanHoi.json();
-      const tuyen = data.routes?.[0];
-      if (tuyen?.geometry?.coordinates && tuyen.geometry.coordinates.length >= 2) {
-        return {
-          toaDo: tuyen.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-          met: tuyen.distance
-        };
-      }
-    } catch {
-      // Thử nguồn tiếp theo
-    }
-  }
-
-  return null;
-}
-
 export async function layDuongPho(cacDiem, phuongTien = 'motorcycle') {
   if (!cacDiem || cacDiem.length < 2) return null;
 
@@ -166,15 +141,11 @@ export async function layDuongPho(cacDiem, phuongTien = 'motorcycle') {
   }
 
   const viec = (async () => {
-    // 1. Nguồn chính: Goong Direction API
+    // Dùng Goong Direction API
     const tuGoong = await taiDuongGoong(cacDiem, phuongTien).catch(() => null);
     if (tuGoong) return tuGoong;
 
-    // 2. Dự phòng: OpenStreetMap / OSRM
-    const tuOSRM = await taiDuongOSRM(cacDiem, phuongTien).catch(() => null);
-    if (tuOSRM) return tuOSRM;
-
-    // 3. Nếu danh sách nhiều trạm mà bị từ chối nguyên chùm, ghép từng chặng liên tiếp
+    // Nếu danh sách nhiều trạm mà bị từ chối nguyên chùm, ghép từng chặng liên tiếp bằng Goong
     if (cacDiem.length > 2) {
       try {
         const cacDoan = [];

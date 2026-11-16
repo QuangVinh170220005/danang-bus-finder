@@ -62,6 +62,7 @@ export default function Sidebar() {
     xoaKetQua,
     layViTriHienTai,
     dangLayViTri,
+    dangTim,
     nhacNho
   } = useBusStore();
 
@@ -109,9 +110,10 @@ export default function Sidebar() {
         <div className="flex gap-2">
           <button
             onClick={timCacTuyen}
-            className="flex-1 bg-primary text-white rounded px-4 py-3 font-medium"
+            disabled={dangTim}
+            className="flex-1 bg-primary text-white rounded px-4 py-3 font-medium disabled:opacity-60"
           >
-            Tìm các tuyến từ A đến B
+            {dangTim ? 'Đang tìm tuyến...' : 'Tìm các tuyến từ A đến B'}
           </button>
           <button onClick={xoaTatCa} className="px-4 py-3 border border-gray-300 rounded">
             Xóa
