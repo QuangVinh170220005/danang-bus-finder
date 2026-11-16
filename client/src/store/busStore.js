@@ -162,10 +162,21 @@ export const useBusStore = create((set, get) => ({
       }))
       .sort((a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram);
 
-    const capNhatPhoPromise = Promise.all(
-      ds.map((g) => capNhatQuangDuongPho(g, diemDi, diemDen))
-    ).then((dsPho) => {
-      const dsDaXep = dsPho.sort(
+    const chayTheoLo = async (items, kichThuocLo, xuLy) => {
+      const ketQua = [];
+      for (let i = 0; i < items.length; i += kichThuocLo) {
+        const lo = items.slice(i, i + kichThuocLo);
+        const phan = await Promise.all(lo.map(xuLy));
+        ketQua.push(...phan);
+      }
+      return ketQua;
+    };
+
+    const topUngVien = ds.slice(0, 8);
+    const phanConLai = ds.slice(8);
+
+    const capNhatPhoPromise = chayTheoLo(topUngVien, 3, (g) => capNhatQuangDuongPho(g, diemDi, diemDen)).then((dsPho) => {
+      const dsDaXep = [...dsPho, ...phanConLai].sort(
         (a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram
       );
       const hienTai = get().goiY;
@@ -176,7 +187,22 @@ export const useBusStore = create((set, get) => ({
         hienTai.diemDen.lat === diemDen.lat &&
         hienTai.diemDen.lng === diemDen.lng
       ) {
-        set({ goiY: { diemDi, diemDen, ds: dsDaXep, dangTinhPho: false } });
+        const tc = get().tuyenChon;
+        let tuyenChonMoi = tc;
+        if (tc) {
+          const cap = dsDaXep.find((g) => g.route.id === tc.tuyenId && g.chieu === tc.chieu);
+          if (cap) {
+            tuyenChonMoi = {
+              ...tc,
+              metDi: cap.metDi,
+              metDen: cap.metDen,
+              toaDoDi: cap.toaDoDi || tc.toaDoDi,
+              toaDoDen: cap.toaDoDen || tc.toaDoDen,
+              toaDoXe: cap.toaDoXe || tc.toaDoXe
+            };
+          }
+        }
+        set({ goiY: { diemDi, diemDen, ds: dsDaXep, dangTinhPho: false }, tuyenChon: tuyenChonMoi });
       }
       return dsDaXep;
     });
@@ -220,10 +246,39 @@ export const useBusStore = create((set, get) => ({
         metDen: g.metDen,
         toaDoDi: g.toaDoDi || null,
         toaDoDen: g.toaDoDen || null,
+        toaDoXe: g.toaDoXe || null,
         diemDi: goiY.diemDi,
         diemDen: goiY.diemDen
       }
     });
+
+    if (!g.daCapNhatPho) {
+      capNhatQuangDuongPho(g, goiY.diemDi, goiY.diemDen).then((cap) => {
+        const { tuyenChon, goiY: hienTai } = get();
+        if (
+          !tuyenChon ||
+          tuyenChon.tuyenId !== g.route.id ||
+          tuyenChon.chieu !== g.chieu ||
+          !hienTai ||
+          hienTai.diemDi.lat !== goiY.diemDi.lat ||
+          hienTai.diemDi.lng !== goiY.diemDi.lng ||
+          hienTai.diemDen.lat !== goiY.diemDen.lat ||
+          hienTai.diemDen.lng !== goiY.diemDen.lng
+        ) {
+          return;
+        }
+        set({
+          tuyenChon: {
+            ...tuyenChon,
+            metDi: cap.metDi,
+            metDen: cap.metDen,
+            toaDoDi: cap.toaDoDi || tuyenChon.toaDoDi,
+            toaDoDen: cap.toaDoDen || tuyenChon.toaDoDen,
+            toaDoXe: cap.toaDoXe || tuyenChon.toaDoXe
+          }
+        });
+      });
+    }
   },
 
   chayIDSHaiPhuongAn: async () => {
@@ -234,9 +289,13 @@ export const useBusStore = create((set, get) => ({
     }
 
     if (goiY.dangTinhPho && goiY.capNhatPhoPromise) {
+      set({ nhacNho: 'Đang tính khoảng cách đường phố...' });
       await goiY.capNhatPhoPromise;
       goiY = get().goiY;
-      if (!goiY?.ds?.length) return;
+      if (!goiY?.ds?.length) {
+        set({ nhacNho: '' });
+        return;
+      }
     }
 
     const itTram = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'itTram');

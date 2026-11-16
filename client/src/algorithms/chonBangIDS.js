@@ -97,7 +97,8 @@ function chayIDSChon(doThi, tieuChi) {
   const steps = [{ type: 'START', message: 'IDS bắt đầu từ giới hạn nhỏ nhất, rồi nới rộng cho đến khi tới điểm đến.' }];
   const lucBatDau = performance.now();
   let gioiHan = itTram ? 1 : 0;
-  const tran = itTram ? 60 : 400;
+  const soNut = Object.keys(doThi.nodes).length;
+  const tran = itTram ? Math.max(100, soNut + 5) : Math.max(1000, soNut * 2);
 
   for (let vong = 0; vong < tran; vong++) {
     stats.iterationsCount += 1;
@@ -185,7 +186,7 @@ function docKetQua(doThi, ids, ds, diemDi, diemDen, tieuChi) {
 
   const tramNodes = ids.path.map((id) => doThi.nodes[id]).filter((node) => node && !node.laDiemNguoiDung);
   const g = ds[tramNodes[0].goiY];
-  const thongKe = thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen);
+  const thongKe = thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen, g.thongKe?.metXe ?? null);
 
   return {
     thanhCong: true,
@@ -198,6 +199,9 @@ function docKetQua(doThi, ids, ds, diemDi, diemDen, tieuChi) {
     metDiBoCuoi: cacDoan[cacDoan.length - 1]?.loai === 'diBo' ? cacDoan[cacDoan.length - 1].met : 0,
     cacDoan,
     cacTram: tramNodes.map((node) => node.tramGoc),
+    toaDoDi: g.toaDoDi || null,
+    toaDoDen: g.toaDoDen || null,
+    toaDoXe: g.toaDoXe || null,
     tuyenId: g.route.id,
     chieu: g.chieu,
     tenTuyen: g.route.name,

@@ -93,6 +93,7 @@ export async function capNhatQuangDuongPho(g, diemA, diemB) {
     cost: metDi + metDen,
     toaDoDi: duongA ? duongA.toaDo : null,
     toaDoDen: duongB ? duongB.toaDo : null,
+    toaDoXe: duongXe ? duongXe.toaDo : null,
     thongKe,
     daCapNhatPho: true
   };

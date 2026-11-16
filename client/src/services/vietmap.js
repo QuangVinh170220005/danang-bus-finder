@@ -21,20 +21,32 @@ async function taiDuongVietMap(cacDiem, phuongTien) {
   params.set('points_encoded', 'false');
   cacDiem.forEach((diem) => params.append('point', `${diem.lat},${diem.lng}`));
 
-  const goc = phuongTien === 'foot'
-    ? 'https://maps.vietmap.vn/api/route?api-version=1.1&'
-    : 'https://maps.vietmap.vn/api/route/v4?';
+  const urls = phuongTien === 'foot'
+    ? [
+        `https://maps.vietmap.vn/api/route/v4?${params}`,
+        `https://maps.vietmap.vn/api/route?api-version=1.1&${params}`
+      ]
+    : [`https://maps.vietmap.vn/api/route/v4?${params}`];
 
-  const phanHoi = await fetch(`${goc}${params}`);
-  const data = await phanHoi.json();
-  const toaDo = data.paths?.[0]?.points?.coordinates;
-  const met = data.paths?.[0]?.distance;
-  if (!toaDo || toaDo.length < 2 || typeof met !== 'number') return null;
+  for (const url of urls) {
+    try {
+      const phanHoi = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!phanHoi.ok) continue;
+      const data = await phanHoi.json();
+      const toaDo = data.paths?.[0]?.points?.coordinates;
+      const met = data.paths?.[0]?.distance;
+      if (toaDo && toaDo.length >= 2 && typeof met === 'number') {
+        return {
+          toaDo: toaDo.map(([lng, lat]) => [lat, lng]),
+          met
+        };
+      }
+    } catch {
+      // Thử endpoint tiếp theo
+    }
+  }
 
-  return {
-    toaDo: toaDo.map(([lng, lat]) => [lat, lng]),
-    met
-  };
+  return null;
 }
 
 // Máy chủ định tuyến đường phố thực tế (OpenStreetMap & OSRM)
@@ -51,7 +63,7 @@ async function taiDuongOSRM(cacDiem, phuongTien = 'foot') {
 
   for (const url of urls) {
     try {
-      const phanHoi = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      const phanHoi = await fetch(url, { signal: AbortSignal.timeout(3500) });
       if (!phanHoi.ok) continue;
       const data = await phanHoi.json();
       const tuyen = data.routes?.[0];
@@ -91,18 +103,23 @@ export async function layDuongPho(cacDiem, phuongTien = 'motorcycle') {
       try {
         const cacDoan = [];
         let tongMet = 0;
+        let coDoanPho = false;
+        let coDoanLoi = false;
         for (let i = 0; i < cacDiem.length - 1; i++) {
           const doan = await layDuongPho([cacDiem[i], cacDiem[i + 1]], phuongTien);
           if (doan && doan.toaDo && doan.toaDo.length >= 2) {
+            coDoanPho = true;
             tongMet += doan.met;
             if (i === 0) cacDoan.push(...doan.toaDo);
             else cacDoan.push(...doan.toaDo.slice(1));
           } else {
-            cacDoan.push([cacDiem[i].lat, cacDiem[i].lng], [cacDiem[i + 1].lat, cacDiem[i + 1].lng]);
+            coDoanLoi = true;
+            if (i === 0) cacDoan.push([cacDiem[i].lat, cacDiem[i].lng], [cacDiem[i + 1].lat, cacDiem[i + 1].lng]);
+            else cacDoan.push([cacDiem[i + 1].lat, cacDiem[i + 1].lng]);
           }
         }
-        if (cacDoan.length >= 2) {
-          return { toaDo: cacDoan, met: tongMet };
+        if (coDoanPho && cacDoan.length >= 2) {
+          return { toaDo: cacDoan, met: tongMet, uocTinh: coDoanLoi };
         }
       } catch (e) {}
     }
@@ -112,11 +129,11 @@ export async function layDuongPho(cacDiem, phuongTien = 'motorcycle') {
 
   boNhoDuong.set(khoa, viec);
   const ketQua = await viec;
-  if (!ketQua) boNhoDuong.delete(khoa);
+  if (!ketQua || ketQua.uocTinh) boNhoDuong.delete(khoa);
   return ketQua;
 }
 
 export function duongPhoHopLy(metThang, metPho) {
-  if (metPho == null || metThang < 15) return false;
+  if (metPho == null || metThang < 3) return false;
   return true;
 }

@@ -99,6 +99,14 @@ const MAP_STYLES = {
     isGoong: true,
     styleUrl: (key) => `https://tiles.goong.io/assets/goong_map_web.json?api_key=${key}`
   },
+  vietmap: {
+    id: 'vietmap',
+    name: 'VietMap (Đường phố VN)',
+    mota: 'Bản đồ chi tiết Việt Nam (VietMap)',
+    url: urlNenVietMap() || 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+    attribution: '&copy; VietMap / OpenStreetMap',
+    maxZoom: 19
+  },
   street: {
     id: 'street',
     name: 'Đường phố chuẩn (Esri)',
@@ -413,7 +421,8 @@ function BatClick() {
 function DuongTheoPho({ diem, mau, netDut, weight, phuongTien = 'motorcycle', doDuc = 0.95 }) {
   const [viTri, setViTri] = useState(null);
   const khoa = `${phuongTien}|${diem.map((mot) => `${mot.lat.toFixed(5)},${mot.lng.toFixed(5)}`).join('|')}`;
-  const quaGan = diem.length < 2 || haversine(diem[0], diem[diem.length - 1]) < 25;
+  const metThang = diem.length >= 2 ? haversine(diem[0], diem[diem.length - 1]) : 0;
+  const quaGan = diem.length < 2 || metThang < 3;
 
   useEffect(() => {
     if (quaGan) {
@@ -421,26 +430,27 @@ function DuongTheoPho({ diem, mau, netDut, weight, phuongTien = 'motorcycle', do
       return undefined;
     }
 
+    const duongThang = diem.map((mot) => [mot.lat, mot.lng]);
+    if (metThang < 15) {
+      setViTri(duongThang);
+      return undefined;
+    }
+
     let conSong = true;
-    setViTri(null);
-    const metThang = haversine(diem[0], diem[diem.length - 1]);
+    setViTri(duongThang);
     layDuongPho(diem, phuongTien).then((duong) => {
       if (!conSong) return;
       if (duong && duongPhoHopLy(metThang, duong.met)) {
         setViTri(duong.toaDo);
         return;
       }
-      if (!duong && phuongTien !== 'foot') {
-        setViTri(diem.map((mot) => [mot.lat, mot.lng]));
-        return;
-      }
-      setViTri(null);
+      setViTri(duongThang);
     });
 
     return () => {
       conSong = false;
     };
-  }, [khoa, quaGan]);
+  }, [khoa, quaGan, metThang]);
 
   if (!viTri || viTri.length < 2) return null;
 
@@ -500,7 +510,9 @@ export default function MapView() {
   const goongKey = import.meta.env.VITE_GOONG_MAP_TILES_KEY || import.meta.env.VITE_GOONG_MAP_KEY || '3WdrQw5HWtXXKRI1qkDa9t4FYRgFXA6aZX2PtYkt';
 
   const [mapStyleKey, setMapStyleKey] = useState(() => {
-    return localStorage.getItem('danang_map_style') || 'goong';
+    const saved = localStorage.getItem('danang_map_style');
+    if (saved && MAP_STYLES[saved]) return saved;
+    return 'goong';
   });
   const [showStyleMenu, setShowStyleMenu] = useState(false);
   const [goongBlocked, setGoongBlocked] = useState(false);
@@ -597,7 +609,11 @@ export default function MapView() {
           <DuongTheoPho diem={tramTheoChieu} mau={mauChieu} weight={chon ? 4 : 4} doDuc={chon ? 0.35 : 0.95} />
         )}
         {!coDuong && chon && chon.j > chon.i && (
-          <DuongTheoPho diem={tramTheoChieu.slice(chon.i, chon.j + 1)} mau={mauChieu} weight={7} />
+          chon.toaDoXe ? (
+            <Polyline positions={chon.toaDoXe} pathOptions={{ color: mauChieu, weight: 7, opacity: 0.95 }} />
+          ) : (
+            <DuongTheoPho diem={tramTheoChieu.slice(chon.i, chon.j + 1)} mau={mauChieu} weight={7} />
+          )
         )}
         {!coDuong && chon && (
           <>
@@ -763,9 +779,21 @@ export default function MapView() {
 
         {coDuong && (
           <>
-            <DuongTheoPho diem={[ketQua.diemDi, ketQua.tramDon]} mau="#16803c" netDut weight={5} phuongTien="foot" />
-            <DuongTheoPho diem={ketQua.cacTram} mau="#1a73e8" weight={5} />
-            <DuongTheoPho diem={[ketQua.tramXuong, ketQua.diemDen]} mau="#16803c" netDut weight={5} phuongTien="foot" />
+            {ketQua.toaDoDi ? (
+              <Polyline positions={ketQua.toaDoDi} pathOptions={{ color: '#16803c', dashArray: '7 7', weight: 5, opacity: 0.95 }} />
+            ) : (
+              <DuongTheoPho diem={[ketQua.diemDi, ketQua.tramDon]} mau="#16803c" netDut weight={5} phuongTien="foot" />
+            )}
+            {ketQua.toaDoXe ? (
+              <Polyline positions={ketQua.toaDoXe} pathOptions={{ color: '#1a73e8', weight: 5, opacity: 0.95 }} />
+            ) : (
+              <DuongTheoPho diem={ketQua.cacTram} mau="#1a73e8" weight={5} />
+            )}
+            {ketQua.toaDoDen ? (
+              <Polyline positions={ketQua.toaDoDen} pathOptions={{ color: '#16803c', dashArray: '7 7', weight: 5, opacity: 0.95 }} />
+            ) : (
+              <DuongTheoPho diem={[ketQua.tramXuong, ketQua.diemDen]} mau="#16803c" netDut weight={5} phuongTien="foot" />
+            )}
             {tramXem && (
               <DuongTheoPho diem={[ketQua.diemDi, tramXem]} mau="#6b7280" netDut weight={4} phuongTien="foot" />
             )}
