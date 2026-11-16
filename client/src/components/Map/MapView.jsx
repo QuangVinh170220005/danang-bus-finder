@@ -4,7 +4,7 @@ import { useBusStore } from '../../store/busStore';
 import { gomCacLan } from '../../algorithms/ids';
 import { layThuTuTram, tenChieu } from '../../algorithms/graph';
 import { haversine } from '../../algorithms/haversine';
-import { duongPhoHopLy, layDuongPho, urlNenVietMap } from '../../services/vietmap';
+import { duongPhoHopLy, layDuongPho } from '../../services/vietmap';
 import 'leaflet/dist/leaflet.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
@@ -98,14 +98,6 @@ const MAP_STYLES = {
     mota: 'Bản đồ vector Goong chuẩn Việt Nam',
     isGoong: true,
     styleUrl: (key) => `https://tiles.goong.io/assets/goong_map_web.json?api_key=${key}`
-  },
-  vietmap: {
-    id: 'vietmap',
-    name: 'VietMap (Đường phố VN)',
-    mota: 'Bản đồ chi tiết Việt Nam (VietMap)',
-    url: urlNenVietMap() || 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-    attribution: '&copy; VietMap / OpenStreetMap',
-    maxZoom: 19
   },
   street: {
     id: 'street',
@@ -437,7 +429,7 @@ function DuongTheoPho({ diem, mau, netDut, weight, phuongTien = 'motorcycle', do
     }
 
     let conSong = true;
-    setViTri(duongThang);
+    setViTri(null);
     layDuongPho(diem, phuongTien).then((duong) => {
       if (!conSong) return;
       if (duong && duongPhoHopLy(metThang, duong.met)) {
@@ -503,7 +495,6 @@ export default function MapView() {
   const chamLanNay = lanDangXem?.loai === 'thu' ? lanDangXem.nut : [];
   const diemDiNhap = docToaDo(chuoiDi);
   const diemDenNhap = docToaDo(chuoiDen);
-  const urlVietMap = urlNenVietMap();
   const tramXem = coDuong ? ketQua.tramKhac.find((tram) => tram.id === tramXemId) : null;
   const xuongSatDen = coDuong && haversine(ketQua.tramXuong, ketQua.diemDen) < 90;
 

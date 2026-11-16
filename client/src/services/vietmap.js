@@ -1,9 +1,7 @@
 const boNhoDuong = new Map();
 
-export function urlNenVietMap() {
-  const key = import.meta.env.VITE_VIETMAP_API_KEY;
-  if (!key) return '';
-  return `https://maps.vietmap.vn/api/tm/{z}/{x}/{y}@2x.png?apikey=${key}`;
+function layGoongApiKey() {
+  return import.meta.env.VITE_GOONG_API_KEY || '';
 }
 
 function khoaDiem(cacDiem, phuongTien) {
@@ -11,45 +9,123 @@ function khoaDiem(cacDiem, phuongTien) {
   return `${phuongTien}|${chuoi}`;
 }
 
-async function taiDuongVietMap(cacDiem, phuongTien) {
-  const key = import.meta.env.VITE_VIETMAP_API_KEY;
-  if (!key) return null;
+function giaiMaPolyline(str) {
+  if (!str) return [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  const coords = [];
 
-  const params = new URLSearchParams();
-  params.set('apikey', key);
-  params.set('vehicle', phuongTien === 'foot' ? 'foot' : 'motorcycle');
-  params.set('points_encoded', 'false');
-  cacDiem.forEach((diem) => params.append('point', `${diem.lat},${diem.lng}`));
+  while (index < str.length) {
+    let b;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = str.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
 
-  const urls = phuongTien === 'foot'
-    ? [
-        `https://maps.vietmap.vn/api/route/v4?${params}`,
-        `https://maps.vietmap.vn/api/route?api-version=1.1&${params}`
-      ]
-    : [`https://maps.vietmap.vn/api/route/v4?${params}`];
+    shift = 0;
+    result = 0;
+    do {
+      b = str.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
 
-  for (const url of urls) {
-    try {
-      const phanHoi = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!phanHoi.ok) continue;
-      const data = await phanHoi.json();
-      const toaDo = data.paths?.[0]?.points?.coordinates;
-      const met = data.paths?.[0]?.distance;
-      if (toaDo && toaDo.length >= 2 && typeof met === 'number') {
-        return {
-          toaDo: toaDo.map(([lng, lat]) => [lat, lng]),
-          met
-        };
-      }
-    } catch {
-      // Thử endpoint tiếp theo
+    coords.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coords;
+}
+
+// Goong Direction API (nguồn chính vẽ đường theo đường phố Việt Nam)
+async function taiDuongGoong(cacDiem, phuongTien) {
+  const key = layGoongApiKey();
+  if (!key || cacDiem.length < 2) return null;
+
+  const vehicle = phuongTien === 'foot' ? 'bike' : 'car';
+  const origin = `${cacDiem[0].lat},${cacDiem[0].lng}`;
+  const destination = cacDiem
+    .slice(1)
+    .map((diem) => `${diem.lat},${diem.lng}`)
+    .join(';');
+
+  const params = new URLSearchParams({
+    origin,
+    destination,
+    vehicle,
+    api_key: key
+  });
+
+  try {
+    const phanHoi = await fetch(`https://rsapi.goong.io/Direction?${params}`, {
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!phanHoi.ok) return null;
+    const data = await phanHoi.json();
+    const route = data.routes?.[0];
+    const toaDo = giaiMaPolyline(route?.overview_polyline?.points);
+    const met = (route?.legs || []).reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+
+    if (toaDo.length >= 2) {
+      return { toaDo, met };
     }
+  } catch {
+    // Fallback sang OSRM nếu Goong lỗi mạng/timeout
   }
 
   return null;
 }
 
-// Máy chủ định tuyến đường phố thực tế (OpenStreetMap & OSRM)
+// Goong Distance Matrix API (tính khoảng cách nhiều điểm trong 1-2 request)
+export async function layMaTranKhoangCach(origins, destinations, vehicle = 'bike') {
+  const key = layGoongApiKey();
+  if (!key || !origins?.length || !destinations?.length) return null;
+
+  const CHUNK = 25;
+  const ketQua = Array.from({ length: origins.length }, () => new Array(destinations.length).fill(null));
+
+  for (let i = 0; i < origins.length; i += CHUNK) {
+    const oChunk = origins.slice(i, i + CHUNK);
+    const originsStr = oChunk.map((p) => `${p.lat},${p.lng}`).join('|');
+
+    for (let j = 0; j < destinations.length; j += CHUNK) {
+      const dChunk = destinations.slice(j, j + CHUNK);
+      const destStr = dChunk.map((p) => `${p.lat},${p.lng}`).join('|');
+      const params = new URLSearchParams({
+        origins: originsStr,
+        destinations: destStr,
+        vehicle,
+        api_key: key
+      });
+
+      try {
+        const phanHoi = await fetch(`https://rsapi.goong.io/DistanceMatrix?${params}`, {
+          signal: AbortSignal.timeout(8000)
+        });
+        if (!phanHoi.ok) continue;
+        const data = await phanHoi.json();
+        (data.rows || []).forEach((row, rIdx) => {
+          (row.elements || []).forEach((el, cIdx) => {
+            if (el.status === 'OK' && typeof el.distance?.value === 'number') {
+              ketQua[i + rIdx][j + cIdx] = el.distance.value;
+            }
+          });
+        });
+      } catch {
+        // Bỏ qua chunk lỗi, giữ null để dùng fallback Haversine
+      }
+    }
+  }
+
+  return ketQua;
+}
+
+// Máy chủ định tuyến dự phòng (OpenStreetMap & OSRM)
 async function taiDuongOSRM(cacDiem, phuongTien = 'foot') {
   const chuoi = cacDiem.map((diem) => `${diem.lng},${diem.lat}`).join(';');
   const profile = phuongTien === 'foot' ? 'foot' : 'driving';
@@ -73,7 +149,7 @@ async function taiDuongOSRM(cacDiem, phuongTien = 'foot') {
           met: tuyen.distance
         };
       }
-    } catch (e) {
+    } catch {
       // Thử nguồn tiếp theo
     }
   }
@@ -90,15 +166,15 @@ export async function layDuongPho(cacDiem, phuongTien = 'motorcycle') {
   }
 
   const viec = (async () => {
-    // 1. Thử VietMap nếu có key
-    const tuVietMap = await taiDuongVietMap(cacDiem, phuongTien).catch(() => null);
-    if (tuVietMap) return tuVietMap;
+    // 1. Nguồn chính: Goong Direction API
+    const tuGoong = await taiDuongGoong(cacDiem, phuongTien).catch(() => null);
+    if (tuGoong) return tuGoong;
 
-    // 2. Thử định tuyến thực tế qua OpenStreetMap / OSRM
+    // 2. Dự phòng: OpenStreetMap / OSRM
     const tuOSRM = await taiDuongOSRM(cacDiem, phuongTien).catch(() => null);
     if (tuOSRM) return tuOSRM;
 
-    // 3. Nếu danh sách nhiều trạm mà bị từ chối nguyên chùm, ghép từng chặng liên tiếp theo đường phố
+    // 3. Nếu danh sách nhiều trạm mà bị từ chối nguyên chùm, ghép từng chặng liên tiếp
     if (cacDiem.length > 2) {
       try {
         const cacDoan = [];
@@ -121,7 +197,7 @@ export async function layDuongPho(cacDiem, phuongTien = 'motorcycle') {
         if (coDoanPho && cacDoan.length >= 2) {
           return { toaDo: cacDoan, met: tongMet, uocTinh: coDoanLoi };
         }
-      } catch (e) {}
+      } catch {}
     }
 
     return null;

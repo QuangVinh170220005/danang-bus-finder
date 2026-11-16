@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { timDuong } from '../algorithms/timDuong';
 import { BAN_KINH_DI_BO, layThuTuTram, taoDoThiToanMang } from '../algorithms/graph';
-import { capNhatQuangDuongPho, goiYTuyen, thongKeHanhTrinh } from '../algorithms/goiYTuyen';
+import { capNhatKhoangCachBangMaTran, capNhatQuangDuongPho, goiYTuyen, thongKeHanhTrinh } from '../algorithms/goiYTuyen';
 import { taoBoChayIDS, bfsPeak, giaiMaDuongIDS, timTramGanNhatBangIDS } from '../algorithms/ids';
 import { chonTuyenBangIDS } from '../algorithms/chonBangIDS';
 
@@ -172,10 +172,25 @@ export const useBusStore = create((set, get) => ({
       return ketQua;
     };
 
-    const topUngVien = ds.slice(0, 8);
-    const phanConLai = ds.slice(8);
+    const capNhatPhoPromise = capNhatKhoangCachBangMaTran(ds, diemDi, diemDen).then(async (dsMaTran) => {
+      const dsDaXepMaTran = dsMaTran.sort(
+        (a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram
+      );
 
-    const capNhatPhoPromise = chayTheoLo(topUngVien, 3, (g) => capNhatQuangDuongPho(g, diemDi, diemDen)).then((dsPho) => {
+      const hienTaiGiua = get().goiY;
+      if (
+        hienTaiGiua &&
+        hienTaiGiua.diemDi.lat === diemDi.lat &&
+        hienTaiGiua.diemDi.lng === diemDi.lng &&
+        hienTaiGiua.diemDen.lat === diemDen.lat &&
+        hienTaiGiua.diemDen.lng === diemDen.lng
+      ) {
+        set({ goiY: { ...hienTaiGiua, ds: dsDaXepMaTran } });
+      }
+
+      const topUngVien = dsDaXepMaTran.slice(0, 8);
+      const phanConLai = dsDaXepMaTran.slice(8);
+      const dsPho = await chayTheoLo(topUngVien, 3, (g) => capNhatQuangDuongPho(g, diemDi, diemDen));
       const dsDaXep = [...dsPho, ...phanConLai].sort(
         (a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram
       );

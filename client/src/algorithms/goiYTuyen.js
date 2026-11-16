@@ -1,6 +1,6 @@
 import { haversine } from './haversine';
 import { layThuTuTram } from './graph';
-import { layDuongPho } from '../services/vietmap';
+import { layDuongPho, layMaTranKhoangCach } from '../services/vietmap';
 import { timDuongDiBoBangIDS } from './ids';
 
 const MET_MOI_PHUT_DI_BO = 5000 / 60;
@@ -66,6 +66,50 @@ export function goiYTuyen(routes, diemA, diemB, banKinh = Infinity) {
   });
 
   return ketQua.sort((a, b) => a.cost - b.cost || a.j - a.i - (b.j - b.i));
+}
+
+// Cập nhật nhanh khoảng cách đi bộ thực tế từ A và tới B cho toàn bộ tuyến gợi ý bằng Goong Distance Matrix (chỉ 2 request)
+export async function capNhatKhoangCachBangMaTran(ds, diemA, diemB) {
+  if (!ds?.length) return ds;
+
+  const khoaToaDo = (p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+  const mapLen = new Map();
+  const mapXuong = new Map();
+
+  const cacDiem = ds.map((g) => {
+    const thuTu = layThuTuTram(g.route, g.chieu);
+    const tramLen = thuTu[g.i];
+    const tramXuong = thuTu[g.j];
+    const kLen = khoaToaDo(tramLen);
+    const kXuong = khoaToaDo(tramXuong);
+    if (!mapLen.has(kLen)) mapLen.set(kLen, { index: mapLen.size, point: tramLen });
+    if (!mapXuong.has(kXuong)) mapXuong.set(kXuong, { index: mapXuong.size, point: tramXuong });
+    return { g, kLen, kXuong };
+  });
+
+  const dsLen = [...mapLen.values()].map((item) => item.point);
+  const dsXuong = [...mapXuong.values()].map((item) => item.point);
+
+  const [maTranDi, maTranDen] = await Promise.all([
+    layMaTranKhoangCach([diemA], dsLen, 'bike').catch(() => null),
+    layMaTranKhoangCach(dsXuong, [diemB], 'bike').catch(() => null)
+  ]);
+
+  return cacDiem.map(({ g, kLen, kXuong }) => {
+    const idxLen = mapLen.get(kLen).index;
+    const idxXuong = mapXuong.get(kXuong).index;
+    const metDi = maTranDi?.[0]?.[idxLen] ?? Math.round(g.metDi);
+    const metDen = maTranDen?.[idxXuong]?.[0] ?? Math.round(g.metDen);
+    const thongKe = thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, metDi, metDen, g.thongKe?.metXe ?? null);
+
+    return {
+      ...g,
+      metDi: Math.round(metDi),
+      metDen: Math.round(metDen),
+      cost: Math.round(metDi + metDen),
+      thongKe
+    };
+  });
 }
 
 // Bổ sung quãng đường thực tế theo đường phố cho các lựa chọn tuyến
