@@ -35,8 +35,7 @@ export function formatPhut(phut) {
   return du ? `${gio} giờ ${du} phút` : `${gio} giờ`;
 }
 
-// Liệt kê các tuyến (cả hai chiều) đi được từ A tới B
-export function goiYTuyen(routes, diemA, diemB, banKinh = Infinity) {
+function timTuyenTheoBanKinh(routes, diemA, diemB, banKinh) {
   const ketQua = [];
 
   routes.forEach((route) => {
@@ -66,6 +65,20 @@ export function goiYTuyen(routes, diemA, diemB, banKinh = Infinity) {
   });
 
   return ketQua.sort((a, b) => a.cost - b.cost || a.j - a.i - (b.j - b.i));
+}
+
+// Liệt kê các tuyến (cả hai chiều) đi được từ A tới B, nới dần bán kính cho đến khi đủ số tuyến gợi ý
+export function goiYTuyen(routes, diemA, diemB, banKinh = Infinity, toiDa = 6) {
+  if (banKinh !== Infinity) {
+    return timTuyenTheoBanKinh(routes, diemA, diemB, banKinh).slice(0, toiDa);
+  }
+  const cacMuc = [800, 1500, 2500, 4000, 6000, Infinity];
+  let ketQua = [];
+  for (const muc of cacMuc) {
+    ketQua = timTuyenTheoBanKinh(routes, diemA, diemB, muc);
+    if (ketQua.length >= toiDa) break;
+  }
+  return ketQua.slice(0, Math.max(toiDa, 10));
 }
 
 // Cập nhật nhanh khoảng cách đi bộ thực tế từ A và tới B cho toàn bộ tuyến gợi ý bằng Goong Distance Matrix (chỉ 2 request)

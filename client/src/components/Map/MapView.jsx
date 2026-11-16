@@ -55,11 +55,14 @@ function GoongMapLayer({ styleUrl, onError, onSuccess }) {
         window.__glMap = glMap;
       }
       if (glMap) {
+        let styleLoaded = false;
         glMap.on('load', () => {
+          styleLoaded = true;
           onSuccessRef.current?.();
         });
-        // Tự động gỡ layer nếu Goong bị chặn (403, 401, CORS, domain restriction) để lộ bản đồ nền
+        // Chỉ fallback nếu lỗi tải style chính (không tự tắt Goong vì lỗi lẻ 1 tile)
         glMap.on('error', (e) => {
+          if (styleLoaded || e?.tile) return;
           const err = e?.error || e;
           const status = err?.status || err?.statusCode;
           const msg = (err?.message || '').toLowerCase();
@@ -146,9 +149,9 @@ const MAP_STYLES = {
 function iconChu(chu, mau) {
   return L.divIcon({
     className: 'tram-so',
-    html: `<div style="background:${mau};color:#fff;min-width:28px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;padding:0 4px;border:2px solid #fff">${chu}</div>`,
-    iconSize: [28, 26],
-    iconAnchor: [14, 26]
+    html: `<div style="position:relative;width:0;height:0"><div style="position:absolute;bottom:11px;left:0;transform:translateX(-50%);background:${mau};color:#fff;height:26px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;padding:0 10px;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.32)">${chu}</div><div style="position:absolute;top:-5px;left:-5px;width:10px;height:10px;border-radius:99px;background:${mau};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div></div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0]
   });
 }
 
@@ -777,6 +780,26 @@ export default function MapView() {
             )}
             {ketQua.toaDoXe ? (
               <Polyline positions={ketQua.toaDoXe} pathOptions={{ color: '#1a73e8', weight: 5, opacity: 0.95 }} />
+            ) : ketQua.cacChangXe?.length > 1 ? (
+              <>
+                {ketQua.cacChangXe.map((chang, idx) => (
+                  <DuongTheoPho
+                    key={`chang-${chang.tuyenId}-${chang.chieu}-${idx}`}
+                    diem={chang.cacTram}
+                    mau={idx === 0 ? '#1a73e8' : '#e8590c'}
+                    weight={5}
+                  />
+                ))}
+                {ketQua.tramChuyen && ketQua.tramChuyenTiep && (
+                  <DuongTheoPho
+                    diem={[ketQua.tramChuyen, ketQua.tramChuyenTiep]}
+                    mau="#16803c"
+                    netDut
+                    weight={4}
+                    phuongTien="foot"
+                  />
+                )}
+              </>
             ) : (
               <DuongTheoPho diem={ketQua.cacTram} mau="#1a73e8" weight={5} />
             )}
@@ -795,6 +818,16 @@ export default function MapView() {
             <Marker position={[ketQua.tramDon.lat, ketQua.tramDon.lng]} icon={iconChu('Đón', '#1a73e8')}>
               <Popup>Trạm đón: {ketQua.tramDon.name}</Popup>
             </Marker>
+            {ketQua.tramChuyen && (
+              <Marker position={[ketQua.tramChuyen.lat, ketQua.tramChuyen.lng]} icon={iconChu('Đổi xe', '#e8590c')} zIndexOffset={1200}>
+                <Popup>
+                  Đổi tuyến tại: {ketQua.tramChuyen.name}
+                  {ketQua.tramChuyenTiep && ketQua.tramChuyenTiep.id !== ketQua.tramChuyen.id && (
+                    <> → {ketQua.tramChuyenTiep.name}</>
+                  )}
+                </Popup>
+              </Marker>
+            )}
             {tramGiua.map((tram) => (
               <CircleMarker
                 key={tram.id}

@@ -179,9 +179,9 @@ export const useBusStore = create((set, get) => ({
     const dsMaTran = await capNhatKhoangCachBangMaTran(dsSoBo, diemDi, diemDen);
     if (ma !== demLanTinh) return;
 
-    const dsDaXep = dsMaTran.sort(
-      (a, b) => a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram
-    );
+    const dsDaXep = dsMaTran
+      .sort((a, b) => a.thongKe.phut - b.thongKe.phut || a.thongKe.tongMet - b.thongKe.tongMet || a.thongKe.soTram - b.thongKe.soTram)
+      .slice(0, 6);
 
     set({
       dangTim: false,
@@ -245,7 +245,7 @@ export const useBusStore = create((set, get) => ({
   },
 
   chayIDSHaiPhuongAn: async () => {
-    let { goiY } = get();
+    let { goiY, routes } = get();
     if (!goiY?.ds?.length) {
       set({ nhacNho: 'Chưa có tuyến nào đi được từ A đến B để IDS chọn.' });
       return;
@@ -261,13 +261,13 @@ export const useBusStore = create((set, get) => ({
       }
     }
 
-    const itTram = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'itTram');
-    const nganNhat = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'nganNhat');
-    const dangXem = itTram.thanhCong ? itTram : nganNhat;
+    const itTram = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'itTram', routes);
+    const nganNhat = chonTuyenBangIDS(goiY.ds, goiY.diemDi, goiY.diemDen, 'nganNhat', routes);
+    const dangXem = nganNhat.thanhCong ? nganNhat : itTram;
 
     set({
       phuongAn: { itTram, nganNhat },
-      tieuChiDangXem: itTram.thanhCong ? 'itTram' : 'nganNhat',
+      tieuChiDangXem: nganNhat.thanhCong ? 'nganNhat' : 'itTram',
       ketQua: dangXem.thanhCong ? dangXem : null,
       idsResult: dangXem.ids || null,
       bfsResult: null,

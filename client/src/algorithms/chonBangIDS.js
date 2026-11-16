@@ -1,11 +1,18 @@
 import { haversine } from './haversine';
-import { layCanh, layThuTuTram } from './graph';
-import { thongKeHanhTrinh } from './goiYTuyen';
+import { layCanh, layThuTuTram, tenChieu } from './graph';
 
 const DIEM_DI = '__diem_di';
 const DIEM_DEN = '__diem_den';
+const BAN_KINH_GAN = 2000;
+const BAN_KINH_CHUYEN_TUYEN = 500;
+const MET_MOI_PHUT_DI_BO = 5000 / 60;
+const MET_MOI_PHUT_XE = 20000 / 60;
 
-function dungDoThi(ds, diemDi, diemDen) {
+function khoaToaDo(p) {
+  return `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+}
+
+function dungDoThi(routes, diemDi, diemDen, ds = []) {
   const nodes = {};
   const edges = {};
 
@@ -26,61 +33,104 @@ function dungDoThi(ds, diemDi, diemDen) {
   edges[DIEM_DI] = [];
   edges[DIEM_DEN] = [];
 
-  ds.forEach((g, idx) => {
+  // Tận dụng khoảng cách đường phố Goong Distance Matrix đã tính sẵn (nếu có)
+  const metDiPhoMap = new Map();
+  const metDenPhoMap = new Map();
+  (ds || []).forEach((g) => {
     const thuTu = layThuTuTram(g.route, g.chieu);
-    const doan = thuTu.slice(g.i, g.j + 1);
+    if (thuTu[g.i]) metDiPhoMap.set(khoaToaDo(thuTu[g.i]), Math.round(g.metDi));
+    if (thuTu[g.j]) metDenPhoMap.set(khoaToaDo(thuTu[g.j]), Math.round(g.metDen));
+  });
 
-    doan.forEach((tram, k) => {
-      const id = `t${idx}_${k}`;
-      nodes[id] = {
-        id,
-        name: tram.name,
-        lat: tram.lat,
-        lng: tram.lng,
-        goiY: idx,
-        tramGoc: tram
-      };
-      edges[id] = [];
-    });
+  const allStopNodes = [];
 
-    edges[DIEM_DI].push({
-      to: `t${idx}_0`,
-      met: Math.round(g.metDi),
-      loai: 'diBo',
-      tuyenId: g.route.id,
-      chieu: g.chieu
-    });
-
-    let tongHaversineXe = 0;
-    const metHaversine = [];
-    for (let k = 0; k < doan.length - 1; k++) {
-      const d = haversine(doan[k], doan[k + 1]);
-      metHaversine.push(d);
-      tongHaversineXe += d;
-    }
-    const metXeThucTe = g.daCapNhatPho && g.thongKe?.metXe > 0 ? g.thongKe.metXe : 0;
-    const tiLeXe = metXeThucTe > 0 && tongHaversineXe > 0 ? metXeThucTe / tongHaversineXe : 1;
-
-    for (let k = 0; k < doan.length - 1; k++) {
-      edges[`t${idx}_${k}`].push({
-        to: `t${idx}_${k + 1}`,
-        met: Math.round(metHaversine[k] * tiLeXe),
-        loai: 'xe',
-        tuyenId: g.route.id,
-        chieu: g.chieu
+  (routes || []).forEach((route) => {
+    ['di', 've'].forEach((chieu) => {
+      const thuTu = layThuTuTram(route, chieu);
+      thuTu.forEach((tram, k) => {
+        const id = `r_${route.id}_${chieu}_${k}`;
+        const node = {
+          id,
+          name: tram.name,
+          lat: tram.lat,
+          lng: tram.lng,
+          tuyenId: route.id,
+          tenTuyen: route.name,
+          chieu,
+          tramGoc: tram
+        };
+        nodes[id] = node;
+        edges[id] = [];
+        allStopNodes.push(node);
       });
-    }
 
-    edges[`t${idx}_${doan.length - 1}`].push({
-      to: DIEM_DEN,
-      met: Math.round(g.metDen),
-      loai: 'diBo',
-      tuyenId: g.route.id,
-      chieu: g.chieu
+      for (let k = 0; k < thuTu.length - 1; k++) {
+        const tuId = `r_${route.id}_${chieu}_${k}`;
+        const denId = `r_${route.id}_${chieu}_${k + 1}`;
+        edges[tuId].push({
+          to: denId,
+          met: Math.round(haversine(thuTu[k], thuTu[k + 1])),
+          loai: 'xe',
+          tuyenId: route.id,
+          chieu
+        });
+      }
     });
   });
 
+  // Thêm cạnh chuyển tuyến giữa 2 tuyến khác nhau có trạm trùng hoặc gần nhau (<= 500m)
+  for (let a = 0; a < allStopNodes.length; a++) {
+    const u = allStopNodes[a];
+    for (let b = a + 1; b < allStopNodes.length; b++) {
+      const v = allStopNodes[b];
+      if (u.tuyenId === v.tuyenId) continue;
+      const d = haversine(u, v);
+      if (d <= BAN_KINH_CHUYEN_TUYEN) {
+        const met = Math.round(d);
+        edges[u.id].push({ to: v.id, met, loai: 'chuyenTuyen' });
+        edges[v.id].push({ to: u.id, met, loai: 'chuyenTuyen' });
+      }
+    }
+  }
+
+  // Nối điểm đi -> các trạm gần nhất (ưu tiên trong 2km; nếu không có thì lấy top 12 trạm gần nhất)
+  const ungVienDi = allStopNodes
+    .map((n) => {
+      const k = khoaToaDo(n);
+      const met = metDiPhoMap.has(k) ? metDiPhoMap.get(k) : Math.round(haversine(diemDi, n));
+      return { id: n.id, met };
+    })
+    .sort((a, b) => a.met - b.met);
+
+  const ganDi = ungVienDi.filter((u) => u.met <= BAN_KINH_GAN);
+  const chonDi = ganDi.length > 0 ? ganDi : ungVienDi.slice(0, 12);
+  chonDi.forEach((u) => {
+    edges[DIEM_DI].push({ to: u.id, met: u.met, loai: 'diBo' });
+  });
+
+  // Nối các trạm gần điểm đến -> điểm đến (ưu tiên trong 2km; nếu không có thì lấy top 12 trạm gần nhất)
+  const ungVienDen = allStopNodes
+    .map((n) => {
+      const k = khoaToaDo(n);
+      const met = metDenPhoMap.has(k) ? metDenPhoMap.get(k) : Math.round(haversine(n, diemDen));
+      return { id: n.id, met };
+    })
+    .sort((a, b) => a.met - b.met);
+
+  const ganDen = ungVienDen.filter((u) => u.met <= BAN_KINH_GAN);
+  const chonDen = ganDen.length > 0 ? ganDen : ungVienDen.slice(0, 12);
+  chonDen.forEach((u) => {
+    edges[u.id].push({ to: DIEM_DEN, met: u.met, loai: 'diBo' });
+  });
+
   return { nodes, edges };
+}
+
+function chiPhiCanh(canh, itTram) {
+  if (itTram) return 1;
+  if (canh.loai === 'diBo') return canh.met * 4;
+  if (canh.loai === 'chuyenTuyen') return canh.met * 4 + 1000;
+  return canh.met;
 }
 
 function chayIDSChon(doThi, tieuChi) {
@@ -98,24 +148,30 @@ function chayIDSChon(doThi, tieuChi) {
   const lucBatDau = performance.now();
   let gioiHan = itTram ? 1 : 0;
   const soNut = Object.keys(doThi.nodes).length;
-  const tran = itTram ? Math.max(100, soNut + 5) : Math.max(1000, soNut * 2);
+  const tran = itTram ? Math.max(80, soNut + 5) : Math.max(1500, soNut * 3);
 
   for (let vong = 0; vong < tran; vong++) {
     stats.iterationsCount += 1;
     steps.push({
       type: 'NEW_DEPTH',
       depth: itTram ? gioiHan : vong + 1,
-      message: itTram ? `Lần ${gioiHan}: tối đa ${gioiHan} bước` : `Lần ${vong + 1}: nới giới hạn quãng đường`
+      message: itTram ? `Lần ${gioiHan}: tối đa ${gioiHan} bước` : `Lần ${vong + 1}: nới giới hạn chi phí`
     });
 
     let vuotNhoNhat = Infinity;
     let totNhat = null;
+    const bestAtState = new Map();
 
-    function dls(nodeId, chiPhiHienTai, metHienTai, duong) {
-      if (stats.nodesVisited >= 200000) {
+    function dls(nodeId, chiPhiHienTai, metHienTai, metDiBoHienTai, soLanChuyen, duong) {
+      if (stats.nodesVisited >= 250000) {
         stats.dungSom = true;
         return;
       }
+
+      const stateKey = `${nodeId}|${soLanChuyen}`;
+      const prevBest = bestAtState.get(stateKey);
+      if (prevBest !== undefined && prevBest <= chiPhiHienTai) return;
+      bestAtState.set(stateKey, chiPhiHienTai);
 
       stats.nodesVisited += 1;
       stats.memoryNodes = Math.max(stats.memoryNodes, duong.length);
@@ -123,11 +179,15 @@ function chayIDSChon(doThi, tieuChi) {
       if (nodeId === DIEM_DEN) {
         const ungVien = {
           path: duong.slice(),
+          chiPhi: chiPhiHienTai,
           met: metHienTai,
+          metDiBo: metDiBoHienTai,
           buoc: duong.length - 1
         };
         const hon = !totNhat
-          || (itTram ? ungVien.buoc < totNhat.buoc || (ungVien.buoc === totNhat.buoc && ungVien.met < totNhat.met) : ungVien.met < totNhat.met);
+          || (itTram
+            ? ungVien.buoc < totNhat.buoc || (ungVien.buoc === totNhat.buoc && ungVien.metDiBo < totNhat.metDiBo)
+            : ungVien.chiPhi < totNhat.chiPhi || (ungVien.chiPhi === totNhat.chiPhi && ungVien.met < totNhat.met));
         if (hon) totNhat = ungVien;
         return;
       }
@@ -135,21 +195,27 @@ function chayIDSChon(doThi, tieuChi) {
       const cacCanh = doThi.edges[nodeId] || [];
       for (let i = 0; i < cacCanh.length; i++) {
         const canh = cacCanh[i];
+        if (canh.loai === 'chuyenTuyen' && soLanChuyen >= 1) continue;
         if (duong.includes(canh.to)) continue;
-        const them = itTram ? 1 : canh.met;
+
+        const them = chiPhiCanh(canh, itTram);
         const moi = chiPhiHienTai + them;
         if (moi > gioiHan) {
           if (moi < vuotNhoNhat) vuotNhoNhat = moi;
           continue;
         }
+
+        const chuyenMoi = canh.loai === 'chuyenTuyen' ? soLanChuyen + 1 : soLanChuyen;
+        const themDiBo = canh.loai === 'diBo' || canh.loai === 'chuyenTuyen' ? canh.met : 0;
+
         duong.push(canh.to);
-        dls(canh.to, moi, metHienTai + canh.met, duong);
+        dls(canh.to, moi, metHienTai + canh.met, metDiBoHienTai + themDiBo, chuyenMoi, duong);
         duong.pop();
         if (stats.dungSom) return;
       }
     }
 
-    dls(DIEM_DI, 0, 0, [DIEM_DI]);
+    dls(DIEM_DI, 0, 0, 0, 0, [DIEM_DI]);
 
     if (totNhat) {
       stats.depthReached = totNhat.buoc;
@@ -163,11 +229,11 @@ function chayIDSChon(doThi, tieuChi) {
   }
 
   stats.timeTaken = performance.now() - lucBatDau;
-  steps.push({ type: 'FAILURE', message: 'Không thấy đường trong các tuyến đã gợi ý' });
+  steps.push({ type: 'FAILURE', message: 'Không thấy đường trong mạng lưới tuyến hiện có' });
   return { found: false, path: [], stats, steps, met: 0 };
 }
 
-function docKetQua(doThi, ids, ds, diemDi, diemDen, tieuChi) {
+function docKetQua(doThi, ids, diemDi, diemDen, tieuChi) {
   const cacDoan = [];
 
   for (let i = 0; i < ids.path.length - 1; i++) {
@@ -179,14 +245,43 @@ function docKetQua(doThi, ids, ds, diemDi, diemDen, tieuChi) {
       den,
       met: canh ? canh.met : Math.round(haversine(tu, den)),
       loai: canh?.loai || 'diBo',
-      tuyenId: canh?.tuyenId,
-      chieu: canh?.chieu
+      tuyenId: canh?.tuyenId || den?.tuyenId,
+      chieu: canh?.chieu || den?.chieu
     });
   }
 
   const tramNodes = ids.path.map((id) => doThi.nodes[id]).filter((node) => node && !node.laDiemNguoiDung);
-  const g = ds[tramNodes[0].goiY];
-  const thongKe = thongKeHanhTrinh(g.route, g.chieu, g.i, g.j, g.metDi, g.metDen, g.thongKe?.metXe ?? null);
+
+  // Gom các trạm theo từng chặng xe buýt (hỗ trợ cả đi thẳng 1 tuyến và chuyển 2 tuyến)
+  const cacChangXe = [];
+  tramNodes.forEach((node) => {
+    const cuoi = cacChangXe[cacChangXe.length - 1];
+    if (cuoi && cuoi.tuyenId === node.tuyenId && cuoi.chieu === node.chieu) {
+      cuoi.cacTram.push(node.tramGoc);
+    } else {
+      cacChangXe.push({
+        tuyenId: node.tuyenId,
+        chieu: node.chieu,
+        tenTuyen: node.tenTuyen,
+        cacTram: [node.tramGoc]
+      });
+    }
+  });
+
+  const metDiBoDau = cacDoan[0]?.loai === 'diBo' ? cacDoan[0].met : 0;
+  const metDiBoCuoi = cacDoan[cacDoan.length - 1]?.loai === 'diBo' ? cacDoan[cacDoan.length - 1].met : 0;
+  const doanChuyen = cacDoan.find((d) => d.loai === 'chuyenTuyen') || null;
+  const metDiBoGiua = doanChuyen ? doanChuyen.met : 0;
+  const metDiBo = Math.round(metDiBoDau + metDiBoGiua + metDiBoCuoi);
+  const metXe = Math.round(
+    cacDoan.filter((d) => d.loai === 'xe').reduce((sum, d) => sum + d.met, 0)
+  );
+  const tongMet = metXe + metDiBo;
+  const phut = metDiBo / MET_MOI_PHUT_DI_BO + metXe / MET_MOI_PHUT_XE + (cacChangXe.length > 1 ? 3 : 0);
+
+  const changDau = cacChangXe[0];
+  const changCuoi = cacChangXe[cacChangXe.length - 1];
+  const moTaTuyen = cacChangXe.map((c) => `Tuyến ${c.tuyenId} (${tenChieu(c.chieu)})`).join(' → ');
 
   return {
     thanhCong: true,
@@ -195,34 +290,45 @@ function docKetQua(doThi, ids, ds, diemDi, diemDen, tieuChi) {
     diemDen,
     tramDon: tramNodes[0].tramGoc,
     tramXuong: tramNodes[tramNodes.length - 1].tramGoc,
-    metDiBoDau: cacDoan[0]?.loai === 'diBo' ? cacDoan[0].met : 0,
-    metDiBoCuoi: cacDoan[cacDoan.length - 1]?.loai === 'diBo' ? cacDoan[cacDoan.length - 1].met : 0,
+    tramChuyen: cacChangXe.length > 1 ? changDau.cacTram[changDau.cacTram.length - 1] : null,
+    tramChuyenTiep: cacChangXe.length > 1 ? changCuoi.cacTram[0] : null,
+    metDiBoDau,
+    metDiBoGiua,
+    metDiBoCuoi,
     cacDoan,
+    cacChangXe,
     cacTram: tramNodes.map((node) => node.tramGoc),
-    toaDoDi: g.toaDoDi || null,
-    toaDoDen: g.toaDoDen || null,
-    toaDoXe: g.toaDoXe || null,
-    tuyenId: g.route.id,
-    chieu: g.chieu,
-    tenTuyen: g.route.name,
+    toaDoDi: null,
+    toaDoDen: null,
+    toaDoXe: null,
+    tuyenId: changDau.tuyenId,
+    chieu: changDau.chieu,
+    tenTuyen: moTaTuyen,
     tramKhac: [],
     ids,
     bfs: null,
-    thongKe,
+    thongKe: {
+      soTram: tramNodes.length,
+      metXe,
+      metDiBo,
+      tongMet,
+      phut
+    },
     tieuChi
   };
 }
 
-export function chonTuyenBangIDS(ds, diemDi, diemDen, tieuChi) {
-  if (!ds?.length) {
+export function chonTuyenBangIDS(ds, diemDi, diemDen, tieuChi, routes = null) {
+  const dsTuyen = routes && routes.length ? routes : (ds || []).map((g) => g.route).filter(Boolean);
+  if (!dsTuyen.length) {
     return { thanhCong: false, thongBao: 'Chưa có tuyến nào để IDS chọn.', ids: null, bfs: null };
   }
 
-  const doThi = dungDoThi(ds, diemDi, diemDen);
+  const doThi = dungDoThi(dsTuyen, diemDi, diemDen, ds);
   const ids = chayIDSChon(doThi, tieuChi);
   if (!ids.found) {
-    return { thanhCong: false, thongBao: 'IDS không tìm được đường trong các tuyến đã gợi ý.', ids, bfs: null };
+    return { thanhCong: false, thongBao: 'IDS không tìm được đường trong các tuyến hiện có.', ids, bfs: null };
   }
 
-  return docKetQua(doThi, ids, ds, diemDi, diemDen, tieuChi);
+  return docKetQua(doThi, ids, diemDi, diemDen, tieuChi);
 }

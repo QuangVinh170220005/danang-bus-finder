@@ -15,13 +15,17 @@ function ThePhuongAn({ tieuDe, moTa, ketQua, dangXem, onXem }) {
       {ketQua?.thanhCong ? (
         <>
           <p className="text-sm font-semibold text-gray-900">
-            Tuyến {ketQua.tuyenId}, {tenChieu(ketQua.chieu)}
+            {ketQua.cacChangXe?.length > 1
+              ? ketQua.tenTuyen
+              : `Tuyến ${ketQua.tuyenId}, ${tenChieu(ketQua.chieu)}`}
           </p>
           <p className="text-sm text-gray-800">
             {formatKm(ketQua.thongKe.tongMet)} · khoảng {formatPhut(ketQua.thongKe.phut)} · {ketQua.thongKe.soTram} trạm
           </p>
           <p className="text-xs text-gray-600">
-            Lên {ketQua.tramDon.name}, xuống {ketQua.tramXuong.name}.
+            Lên {ketQua.tramDon.name}
+            {ketQua.tramChuyen ? `, đổi xe tại ${ketQua.tramChuyen.name}` : ''}
+            , xuống {ketQua.tramXuong.name}.
             <br />
             Xe {formatKm(ketQua.thongKe.metXe)}, đi bộ {formatKm(ketQua.thongKe.metDiBo)}.
           </p>
@@ -65,18 +69,18 @@ export default function IDSVisualizer() {
       {phuongAn && (
         <div className="space-y-2">
           <ThePhuongAn
-            tieuDe="1. Ít trạm nhất"
-            moTa="IDS ưu tiên đường qua ít trạm nhất. Cùng số trạm thì lấy đường ngắn hơn."
-            ketQua={phuongAn.itTram}
-            dangXem={tieuChiDangXem === 'itTram'}
-            onXem={() => xemPhuongAn('itTram')}
-          />
-          <ThePhuongAn
-            tieuDe="2. Quãng đường ngắn nhất"
-            moTa="IDS nới dần giới hạn số mét cho đến khi tới B. Đường trả về là đường ngắn nhất."
+            tieuDe="1. Đường tối ưu (nhanh & ít đi bộ)"
+            moTa="IDS ưu tiên đường ít đi bộ và thời gian ngắn nhất (hỗ trợ chuyển 1 tuyến)."
             ketQua={phuongAn.nganNhat}
             dangXem={tieuChiDangXem === 'nganNhat'}
             onXem={() => xemPhuongAn('nganNhat')}
+          />
+          <ThePhuongAn
+            tieuDe="2. Ít trạm nhất"
+            moTa="IDS ưu tiên đường qua ít trạm nhất từ các trạm gần A tới gần B."
+            ketQua={phuongAn.itTram}
+            dangXem={tieuChiDangXem === 'itTram'}
+            onXem={() => xemPhuongAn('itTram')}
           />
           {cungMot && (
             <p className="text-xs text-gray-600">Hai tiêu chí cùng chọn một chuyến.</p>
